@@ -41,4 +41,9 @@ node --test tests/rendered-html.test.mjs
 
 ## Production stack
 
-Next.js App Router, TypeScript, Tailwind CSS, GSAP + ScrollTrigger, and the vinext/Cloudflare runtime.
+Next.js App Router, TypeScript, Tailwind CSS, GSAP + ScrollTrigger, and Vercel.
+
+## Deployment
+
+The production site is deployed from the `main` branch on Vercel. The repository
+includes `vercel.json` so Vercel always detects and builds it as a Next.js app.
