@@ -3,10 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("defines the Adee's Food Phase 1 experience", async () => {
-  const [layout, page, hero, reveal] = await Promise.all([
+  const [layout, page, hero, media, reveal] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/HeroStory.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/CinematicMedia.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/FirstFoodReveal.tsx", import.meta.url), "utf8"),
   ]);
 
@@ -17,8 +18,10 @@ test("defines the Adee's Food Phase 1 experience", async () => {
   assert.match(hero, /first sip/i);
   assert.match(hero, /last bite/i);
   assert.match(reveal, /Made for/);
-  assert.match(reveal, /Asset required/i);
-  assert.doesNotMatch(`${layout}${hero}${reveal}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+  assert.match(media, /milo-milk-tea-hero\.webp/i);
+  assert.match(reveal, /grilled-chicken-reveal\.webp/i);
+  assert.doesNotMatch(`${media}${reveal}`, /Asset required/i);
+  assert.doesNotMatch(`${layout}${hero}${media}${reveal}`, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
 test("keeps motion accessible and the prototype asset-honest", async () => {
@@ -33,7 +36,7 @@ test("keeps motion accessible and the prototype asset-honest", async () => {
   assert.match(css, /overflow-x:\s*hidden/);
   assert.match(page, /Restaurant/);
   assert.match(menu, /menuCategories:\s*MenuCategory\[\]\s*=\s*\[\]/);
-  assert.match(assets, /No Adee's production assets were included/);
+  assert.match(assets, /Three approved raster assets/);
   assert.doesNotMatch(page, /address|telephone|openingHours|priceRange/);
 });
 

@@ -98,34 +98,14 @@ button:disabled {
   z-index: 102;
   display: inline-flex;
   width: fit-content;
-  align-items: baseline;
-  gap: 0.55rem;
-  line-height: 1;
+  align-items: center;
 }
 
-.wordmark-name {
-  font-family: var(--font-display), Georgia, serif;
-  font-size: 1.75rem;
-  font-weight: 600;
-  letter-spacing: -0.045em;
-}
-
-.wordmark-name::after {
-  position: absolute;
-  top: -0.05rem;
-  right: 2.4rem;
-  width: 0.26rem;
-  height: 0.26rem;
-  border-radius: 50%;
-  background: var(--pink);
-  content: "";
-}
-
-.wordmark-sub {
-  color: var(--warm-grey);
-  font-size: 0.53rem;
-  font-weight: 700;
-  letter-spacing: 0.3em;
+.wordmark-logo {
+  width: 4.65rem;
+  height: 4.65rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0 0.8rem rgb(233 30 115 / 0.2));
 }
 
 .desktop-nav {
@@ -527,183 +507,42 @@ button:disabled {
   letter-spacing: 0.22em;
 }
 
-/* Cinematic media placeholder */
+/* Cinematic hero media */
 
 .cinematic-media {
   position: absolute;
-  top: 7svh;
-  right: clamp(0rem, 3vw, 4rem);
+  inset: -8%;
   z-index: 2;
-  width: min(51vw, 52rem);
-  height: 84svh;
-  min-height: 31rem;
-  transform-origin: 55% 55%;
+  overflow: hidden;
+  transform-origin: 70% 55%;
   will-change: transform;
 }
 
 .cinematic-media::before {
   position: absolute;
-  top: 6%;
-  right: 1%;
-  bottom: 2%;
-  left: 13%;
-  border: 1px solid rgb(198 163 106 / 0.14);
-  border-radius: 48% 48% 5% 5%;
-  opacity: 0.6;
-  content: "";
-  mask-image: linear-gradient(to bottom, black, transparent 85%);
-}
-
-.media-halo {
-  position: absolute;
-  top: 10%;
-  left: 21%;
-  width: 70%;
-  height: 70%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgb(194 112 47 / 0.25), rgb(76 34 18 / 0.08) 43%, transparent 72%);
-  filter: blur(1rem);
-}
-
-.cup {
-  position: absolute;
-  right: 14%;
-  bottom: 13%;
-  width: min(24vw, 23rem);
-  height: min(23vw, 22rem);
-  border: 1px solid rgb(245 239 230 / 0.52);
-  border-top: 0;
-  border-radius: 5% 5% 36% 36% / 5% 5% 20% 20%;
-  background:
-    linear-gradient(105deg, rgb(253 251 247 / 0.96), rgb(195 183 166 / 0.85) 42%, rgb(100 78 62 / 0.78) 72%, rgb(245 239 230 / 0.86));
-  box-shadow:
-    inset 1.5rem 0 3rem rgb(255 255 255 / 0.2),
-    inset -2rem -1rem 4rem rgb(43 20 11 / 0.35),
-    0 3rem 6rem rgb(0 0 0 / 0.64);
-  transform: perspective(60rem) rotateY(-7deg);
-}
-
-.cup-rim {
-  position: absolute;
-  top: -7%;
-  left: -1.2%;
-  width: 102.4%;
-  height: 15%;
-  border: 0.4rem solid #e8ded1;
-  border-radius: 50%;
-  background: #7b3b1d;
-  box-shadow: inset 0 0.5rem 1.2rem rgb(25 10 5 / 0.58), 0 0.3rem 0.6rem rgb(0 0 0 / 0.25);
-}
-
-.cup-liquid {
-  position: absolute;
-  top: -4.7%;
-  left: 2.8%;
-  width: 94.4%;
-  height: 9%;
-  border-radius: 50%;
-  background:
-    radial-gradient(ellipse at 42% 42%, #d7b08b 0 4%, transparent 5%),
-    radial-gradient(ellipse at 50% 50%, #b77747 0 19%, #8b4524 45%, #4a210f 85%);
-}
-
-.cup-handle {
-  position: absolute;
-  top: 22%;
-  right: -29%;
-  width: 39%;
-  height: 48%;
-  border: 0.95rem solid rgb(210 197 180 / 0.84);
-  border-left: 0.42rem solid rgb(150 129 111 / 0.62);
-  border-radius: 0 50% 50% 0;
-  box-shadow: 1.2rem 1.2rem 2rem rgb(0 0 0 / 0.3);
-}
-
-.cup-shadow {
-  position: absolute;
-  right: 5%;
-  bottom: 5%;
-  width: 60%;
-  height: 10%;
-  border-radius: 50%;
-  background: rgb(0 0 0 / 0.84);
-  filter: blur(1.4rem);
-}
-
-.surface-line {
-  position: absolute;
-  right: 2%;
-  bottom: 9.5%;
-  width: 82%;
-  height: 1px;
-  background: linear-gradient(to right, transparent, rgb(198 163 106 / 0.44), transparent);
-  box-shadow: 0 0 2rem rgb(198 163 106 / 0.28);
-}
-
-.steam {
-  position: absolute;
+  inset: 0;
   z-index: 2;
-  width: 0.7rem;
-  height: 25%;
-  border-left: 1px solid rgb(245 239 230 / 0.28);
-  border-radius: 50%;
-  filter: blur(0.22rem);
-  opacity: 0;
-  animation: steam-rise 7s ease-in-out infinite;
+  background-image: repeating-radial-gradient(circle at 20% 30%, rgb(255 255 255 / 0.08) 0 0.4px, transparent 0.7px 3px);
+  opacity: 0.045;
+  pointer-events: none;
+  content: "";
 }
 
-.steam-one {
-  top: 25%;
-  right: 37%;
-}
-
-.steam-two {
-  top: 20%;
-  right: 49%;
-  height: 31%;
-  animation-delay: 1.8s;
-}
-
-.steam-three {
-  top: 28%;
-  right: 57%;
-  height: 20%;
-  animation-delay: 3.6s;
-}
-
-@keyframes steam-rise {
-  0% { opacity: 0; transform: translate3d(0, 1.5rem, 0) scaleX(0.7); }
-  24% { opacity: 0.52; }
-  70% { opacity: 0.12; }
-  100% { opacity: 0; transform: translate3d(1.4rem, -5rem, 0) scaleX(1.6); }
-}
-
-.asset-marker,
-.food-asset-marker {
+.hero-media-image {
   position: absolute;
-  z-index: 4;
-  margin: 0;
-  color: rgb(245 239 230 / 0.45);
-  font-size: 0.52rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  line-height: 1.7;
-  text-transform: uppercase;
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(0.94) contrast(1.04);
 }
 
-.asset-marker {
-  right: 0;
-  bottom: 0;
-  max-width: 13rem;
-  text-align: right;
-}
-
-.asset-marker span,
-.food-asset-marker span {
-  display: block;
-  color: var(--pink);
-  font-size: 0.48rem;
-  letter-spacing: 0.2em;
+.hero-media-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgb(10 8 7 / 0.95) 2%, rgb(10 8 7 / 0.76) 29%, rgb(10 8 7 / 0.2) 58%, rgb(10 8 7 / 0.08) 82%),
+    linear-gradient(to top, rgb(10 8 7 / 0.58), transparent 36%, rgb(10 8 7 / 0.16));
+  pointer-events: none;
 }
 
 .transition-veil {
@@ -742,9 +581,13 @@ button:disabled {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 66% 53%, rgb(123 58 28 / 0.26), transparent 23%),
-    radial-gradient(ellipse at 68% 52%, #20130d 0, #0f0b08 46%, #090807 82%);
+  background: #090807;
+}
+
+.first-food-image {
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(0.92) contrast(1.04) brightness(0.9);
 }
 
 .first-food-media::after {
@@ -753,37 +596,6 @@ button:disabled {
   background-image: repeating-radial-gradient(circle at 72% 40%, rgb(255 255 255 / 0.08) 0 0.45px, transparent 0.8px 3.3px);
   opacity: 0.05;
   content: "";
-}
-
-.plate-placeholder {
-  position: absolute;
-  top: 53%;
-  right: 8vw;
-  width: min(52vw, 49rem);
-  aspect-ratio: 1.45;
-  border: 1px solid rgb(245 239 230 / 0.21);
-  border-radius: 50%;
-  background:
-    radial-gradient(ellipse, transparent 0 31%, rgb(104 67 43 / 0.24) 32% 35%, transparent 36%),
-    radial-gradient(ellipse, rgb(29 18 12 / 0.8) 0 52%, rgb(188 170 148 / 0.45) 53% 56%, rgb(73 58 47 / 0.48) 57% 69%, transparent 70%);
-  filter: drop-shadow(0 4rem 3rem rgb(0 0 0 / 0.5));
-  transform: translateY(-50%) rotate(-7deg);
-}
-
-.plate-placeholder span {
-  position: absolute;
-  top: 32%;
-  left: 38%;
-  width: 27%;
-  height: 25%;
-  border: 1px dashed rgb(233 30 115 / 0.55);
-  border-radius: 50%;
-}
-
-.food-asset-marker {
-  right: clamp(1.5rem, 5vw, 6rem);
-  bottom: 2rem;
-  text-align: right;
 }
 
 .first-food-copy {
@@ -833,10 +645,6 @@ button:disabled {
     font-size: clamp(4.8rem, 10vw, 7.5rem);
   }
 
-  .cinematic-media {
-    right: 1rem;
-    width: 54vw;
-  }
 }
 
 @media (max-width: 720px) {
@@ -848,12 +656,9 @@ button:disabled {
     padding: 0 1.25rem;
   }
 
-  .wordmark-name {
-    font-size: 1.45rem;
-  }
-
-  .wordmark-name::after {
-    right: 2.25rem;
+  .wordmark-logo {
+    width: 3.8rem;
+    height: 3.8rem;
   }
 
   .order-link {
@@ -931,45 +736,17 @@ button:disabled {
   }
 
   .cinematic-media {
-    top: 4svh;
-    right: -7vw;
-    width: 105vw;
-    height: 59svh;
-    min-height: 24rem;
+    inset: -8%;
   }
 
-  .cinematic-media::before {
-    top: 10%;
-    right: 8%;
-    bottom: 0;
-    left: 20%;
+  .hero-media-image {
+    object-position: 69% center;
   }
 
-  .cup {
-    right: 18%;
-    bottom: 10%;
-    width: min(49vw, 13.5rem);
-    height: min(47vw, 13rem);
-  }
-
-  .media-halo {
-    top: 7%;
-    left: 25%;
-  }
-
-  .steam-one { right: 38%; }
-  .steam-two { right: 50%; }
-  .steam-three { right: 59%; }
-
-  .asset-marker {
-    right: 9%;
-    bottom: -1.1rem;
-    max-width: 11rem;
-    font-size: 0.45rem;
-  }
-
-  .asset-marker span {
-    font-size: 0.42rem;
+  .hero-media-overlay {
+    background:
+      linear-gradient(to top, rgb(10 8 7 / 0.97) 6%, rgb(10 8 7 / 0.72) 31%, transparent 62%),
+      linear-gradient(90deg, rgb(10 8 7 / 0.48), transparent 58%);
   }
 
   .scroll-cue {
@@ -998,10 +775,9 @@ button:disabled {
     background: linear-gradient(to top, rgb(10 8 7 / 0.86) 10%, transparent 62%);
   }
 
-  .plate-placeholder {
-    top: 39%;
-    right: -15vw;
-    width: 105vw;
+  .first-food-image {
+    object-position: 58% center;
+    transform: scale(1.03);
   }
 
   .first-food-copy {
@@ -1028,13 +804,6 @@ button:disabled {
     font-size: 0.54rem;
   }
 
-  .food-asset-marker {
-    top: 1.2rem;
-    right: 1.25rem;
-    bottom: auto;
-    max-width: 12rem;
-    font-size: 0.45rem;
-  }
 }
 
 @media (max-width: 370px), (max-height: 660px) {
@@ -1050,14 +819,6 @@ button:disabled {
     margin-top: 1.2rem;
   }
 
-  .cinematic-media {
-    top: 1svh;
-    height: 55svh;
-  }
-
-  .asset-marker {
-    display: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

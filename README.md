@@ -6,8 +6,9 @@ This review build includes:
 
 - the responsive primary header;
 - a GSAP/ScrollTrigger cinematic hero sequence;
-- the Milo + milk tea development media placeholder;
+- the supplied Milo + milk tea cinematic hero image;
 - the continuous transition into the first food reveal;
+- the supplied grilled chicken food reveal and Adee's logo;
 - accessible reduced-motion behavior; and
 - explicit documentation for every missing production asset.
 
@@ -37,7 +38,7 @@ node --test tests/rendered-html.test.mjs
 - [DESIGN_PLAN.md](./DESIGN_PLAN.md) defines the visual, motion, responsive, and technical direction.
 - [ASSET_REQUIREMENTS.md](./ASSET_REQUIREMENTS.md) inventories all missing media and content.
 - `data/menu.ts` remains intentionally empty because approved menu names and prices have not yet been supplied.
-- Placeholder media is built with CSS and labeled in the interface; no fake restaurant imagery or operational details are included.
+- Supplied imagery is stored as optimized WebP assets; no fake operational details are included.
 
 ## Production stack
 

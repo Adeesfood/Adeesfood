@@ -25,9 +25,9 @@ The emotional sequence is:
 
 ## Phase 1 layout
 
-- **Header** — wordmark placeholder, minimal navigation, and restrained order action. Future-phase destinations remain visibly present but non-functional until their content and URLs exist.
+- **Header** — supplied Adee's logo, minimal navigation, and restrained order action. Future-phase destinations remain visibly present but non-functional until their content and URLs exist.
 - **Pinned hero story** — a 320–360vh scroll track with a single 100svh stage. Copy crossfades; the beverage media position, scale, warmth, and steam veil evolve gradually.
-- **First food reveal** — a nearly full-viewport image stage emerging directly from the hero's dark veil, followed by the Phase 1 menu call to action.
+- **First food reveal** — the supplied grilled chicken photograph in a nearly full-viewport stage emerging directly from the hero's dark veil, followed by the Phase 1 menu call to action.
 
 ## Animation strategy
 

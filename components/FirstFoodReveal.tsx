@@ -1,18 +1,17 @@
+import Image from "next/image";
+
 export function FirstFoodReveal() {
   return (
     <section className="first-food" id="first-food" aria-labelledby="food-title">
-      <div
-        className="first-food-media"
-        role="img"
-        aria-label="Development placeholder for the first cinematic food photograph"
-      >
-        <div className="plate-placeholder" aria-hidden="true">
-          <span />
-        </div>
-        <p className="food-asset-marker">
-          <span>Asset required</span>
-          First food reveal — landscape 2400 × 1600
-        </p>
+      <div className="first-food-media">
+        <Image
+          className="first-food-image"
+          src="/images/menu/grilled-chicken-reveal.webp"
+          alt="Glazed grilled chicken with roasted potatoes and peppers, served hot"
+          fill
+          quality={90}
+          sizes="100vw"
+        />
       </div>
 
       <div className="first-food-copy">

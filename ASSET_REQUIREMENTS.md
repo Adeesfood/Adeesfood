@@ -2,17 +2,23 @@
 
 ## Current asset inventory
 
-No Adee's production assets were included with the initial brief. The only supplied file is the written website brief. The starter's generic icons are not part of the Adee's brand and are removed from the finished prototype.
+Three approved raster assets are now included in the Phase 1 build:
+
+- `public/brand/adees-logo.webp` — supplied Adee's pink logo, cropped and optimized to 640×640.
+- `public/images/hero/milo-milk-tea-hero.webp` — supplied 1672×941 hero photograph.
+- `public/images/menu/grilled-chicken-reveal.webp` — supplied 1672×941 first-food photograph.
+
+The supplied photographs are strong prototype assets and are optimized as WebP. Higher-resolution masters and dedicated portrait crops remain recommended before the final performance phase.
 
 ## Phase 1 priority assets
 
 | Asset name | Purpose | Recommended size | Orientation | Format | Transparent background | Mobile variant | Motion/video |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `adees-logo-light` | Header wordmark on dark backgrounds | SVG with clean viewBox; raster fallback 1200px wide | Horizontal | SVG + WebP fallback | Yes | Optional compact mark | No |
+| `adees-logo-light` | Header wordmark on dark backgrounds | Supplied 640×640 WebP is in use; final SVG still recommended | Square | SVG + WebP fallback | Yes | Optional compact mark | No |
 | `adees-logo-dark` | Future light-background use | SVG with clean viewBox; raster fallback 1200px wide | Horizontal | SVG + WebP fallback | Yes | Optional compact mark | No |
-| `milo-milk-tea-hero-poster` | Critical hero fallback and video poster | 2400×3000 portrait master; 2400×1600 landscape crop | Portrait + landscape | AVIF/WebP | No | Yes, 1600×2000 | No |
+| `milo-milk-tea-hero-poster` | Critical hero fallback and video poster | Supplied 1672×941 WebP is in use; 2400px+ master remains recommended | Landscape | AVIF/WebP | No | Portrait crop still recommended | No |
 | `milo-milk-tea-hero` | Pinned cinematic hero layer | 2160×2700 portrait or 3840×2160 landscape master | Portrait preferred for the composition | MP4 (H.264) + WebM | No | Yes, shorter/lighter crop | Yes: 8–15s seamless, subtle steam/camera motion |
-| `first-food-reveal` | Full-viewport transition from beverage into food | 2400×1600 minimum | Landscape | AVIF/WebP | No | Yes, 1600×2000 portrait crop | Optional very slow 6–10s motion plate |
+| `first-food-reveal` | Full-viewport transition from beverage into food | Supplied 1672×941 WebP is in use; 2400px+ master remains recommended | Landscape | AVIF/WebP | No | Portrait crop still recommended | Optional very slow 6–10s motion plate |
 
 ## Later homepage assets
 

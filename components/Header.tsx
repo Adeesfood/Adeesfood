@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { navigationItems } from "../data/navigation";
 
@@ -18,8 +19,14 @@ export function Header() {
   return (
     <header className="site-header" data-site-header>
       <a className="wordmark" href="#top" aria-label="Adee's Food home">
-        <span className="wordmark-name">ADEE&apos;S</span>
-        <span className="wordmark-sub">FOOD</span>
+        <Image
+          className="wordmark-logo"
+          src="/brand/adees-logo.webp"
+          alt=""
+          width={640}
+          height={640}
+          priority
+        />
       </a>
 
       <nav className="desktop-nav" aria-label="Primary navigation">
