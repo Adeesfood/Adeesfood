@@ -10,7 +10,12 @@
     "build": "next build",
     "start": "next start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:start": "supabase db start",
+    "db:stop": "supabase db stop",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "db:lint": "supabase db lint --local --level warning"
   },
   "dependencies": {
     "gsap": "^3.15.0",
@@ -25,6 +30,7 @@
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
+    "supabase": "^2.113.0",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3"
   },

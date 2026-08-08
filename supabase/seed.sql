@@ -1,0 +1,5 @@
+-- Local development seed file.
+--
+-- Production reference data such as roles and permission mappings is installed
+-- by migrations. Restaurant-specific organizations, locations, users, menu
+-- items, prices, or financial data must not be invented here.
