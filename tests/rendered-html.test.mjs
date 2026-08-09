@@ -54,12 +54,13 @@ test("uses the native Vercel Next.js build", async () => {
 });
 
 test("connects staff login to protected Supabase management access", async () => {
-  const [header, footer, login, management, proxy, serverClient, envExample, packageSource] =
+  const [header, footer, login, management, managementSession, proxy, serverClient, envExample, packageSource] =
     await Promise.all([
       readFile(new URL("../components/Header.tsx", import.meta.url), "utf8"),
       readFile(new URL("../components/Footer.tsx", import.meta.url), "utf8"),
       readFile(new URL("../components/StaffLoginForm.tsx", import.meta.url), "utf8"),
       readFile(new URL("../app/management/page.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../lib/management.ts", import.meta.url), "utf8"),
       readFile(new URL("../lib/supabase/proxy.ts", import.meta.url), "utf8"),
       readFile(new URL("../lib/supabase/server.ts", import.meta.url), "utf8"),
       readFile(new URL("../.env.example", import.meta.url), "utf8"),
@@ -70,15 +71,16 @@ test("connects staff login to protected Supabase management access", async () =>
   assert.match(footer, /Enter management system/i);
   assert.match(login, /signInWithPassword/);
   assert.match(login, /get_my_access_context/);
-  assert.match(management, /getClaims/);
-  assert.match(management, /get_my_access_context/);
+  assert.match(management, /getManagementSession/);
+  assert.match(managementSession, /getClaims/);
+  assert.match(managementSession, /get_my_access_context/);
   assert.match(proxy, /getClaims/);
   assert.match(proxy, /\/management/);
   assert.match(serverClient, /createServerClient/);
   assert.match(envExample, /NEXT_PUBLIC_SUPABASE_URL/);
   assert.match(envExample, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/);
   assert.doesNotMatch(
-    `${header}${footer}${login}${management}${proxy}${serverClient}${envExample}${packageSource}`,
+    `${header}${footer}${login}${management}${managementSession}${proxy}${serverClient}${envExample}${packageSource}`,
     /service[_-]?role|sb_secret_/i,
   );
 });

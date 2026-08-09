@@ -1,0 +1,330 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { FormSubmitButton } from "@/components/management/FormSubmitButton";
+import { KdsElapsed } from "@/components/management/KdsElapsed";
+import { LiveRefresh } from "@/components/management/LiveRefresh";
+import { OrderComposer } from "@/components/management/OrderComposer";
+import { canAccessModule, managementModules } from "@/lib/access";
+import { businessDate, formatDateTime, formatMoney, getManagementSession, hasPermission } from "@/lib/management";
+import {
+  advanceKitchenTicket,
+  advanceOrder,
+  changeRestaurantTableStatus,
+  changeStaffRole,
+  createCustomer,
+  createExpense,
+  createInventoryCategory,
+  createInventoryItem,
+  createMenuCategory,
+  createMenuItem,
+  createPurchaseOrder,
+  createRecipe,
+  createReservation,
+  createRestaurantTable,
+  createStaffShift,
+  createSupplier,
+  postStockMovement,
+  prepareDailyClose,
+  publishRecipe,
+  receivePurchaseOrder,
+  recordOrderPayment,
+  saveOperationalSetting,
+  toggleMenuAvailability,
+  updateReservationStatus,
+  updateRestaurantProfile,
+} from "../module-actions";
+
+type PageProps = {
+  params: Promise<{ module: string }>;
+  searchParams: Promise<{ success?: string; error?: string; from?: string; to?: string }>;
+};
+
+type Session = Awaited<ReturnType<typeof getManagementSession>>;
+type Query = Awaited<PageProps["searchParams"]>;
+type RecipeIngredient = {
+  quantity: number | string;
+  unit: string;
+  inventory_items: { name: string; average_cost_minor: number | string } | Array<{ name: string; average_cost_minor: number | string }> | null;
+};
+type PurchaseLine = { item_name: string; quantity: number | string; unit: string };
+type CustomerOrder = { total_minor: number | string; created_at: string };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { module: slug } = await params;
+  const moduleConfig = managementModules.find((item) => item.slug === slug);
+  return { title: moduleConfig?.name ?? "Management" };
+}
+
+function Notice({ query }: { query: Query }) {
+  if (query.success) return <div className="ops-alert is-success">{query.success}</div>;
+  if (query.error) return <div className="ops-alert is-error">{query.error}</div>;
+  return null;
+}
+
+function PageHead({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
+  return <section className="ops-page-head"><div><p className="ops-kicker">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div>{action}</section>;
+}
+
+function Empty({ title, body }: { title: string; body: string }) {
+  return <div className="ops-empty is-wide"><strong>{title}</strong><p>{body}</p></div>;
+}
+
+export default async function ModulePage({ params, searchParams }: PageProps) {
+  const [{ module: slug }, query, session] = await Promise.all([params, searchParams, getManagementSession()]);
+  const moduleConfig = managementModules.find((item) => item.slug === slug);
+  if (!moduleConfig) redirect("/management");
+  if (!canAccessModule(session.access.permissions, moduleConfig)) redirect("/management?error=access");
+
+  let content: React.ReactNode;
+  switch (slug) {
+    case "orders": content = await OrdersModule(session); break;
+    case "kitchen": content = await KitchenModule(session); break;
+    case "tables": content = await TablesModule(session); break;
+    case "menu": content = await MenuModule(session); break;
+    case "inventory": content = await InventoryModule(session); break;
+    case "recipes": content = await RecipesModule(session); break;
+    case "purchasing": content = await PurchasingModule(session); break;
+    case "suppliers": content = await SuppliersModule(session); break;
+    case "customers": content = await CustomersModule(session); break;
+    case "reservations": content = await ReservationsModule(session); break;
+    case "staff": content = await StaffModule(session); break;
+    case "finance": content = await FinanceModule(session); break;
+    case "reports": content = await ReportsModule(session, query); break;
+    case "settings": content = await SettingsModule(session); break;
+    default: redirect("/management");
+  }
+
+  return <><Notice query={query} />{content}</>;
+}
+
+async function OrdersModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [menuResult, customersResult, tablesResult, ordersResult] = await Promise.all([
+    supabase.from("menu_items").select("id, name, description, price_minor, station, is_available, menu_categories(name)")
+      .eq("location_id", assignment.location_id).eq("is_active", true).order("name"),
+    supabase.from("customers").select("id, display_name, phone").eq("location_id", assignment.location_id).eq("is_active", true).order("display_name").limit(100),
+    supabase.from("restaurant_tables").select("id, code, capacity, status").eq("location_id", assignment.location_id).eq("is_active", true).in("status", ["AVAILABLE", "OCCUPIED"]).order("code"),
+    supabase.from("orders").select("id, order_number, channel, order_status, kitchen_status, payment_status, fulfillment_status, total_minor, amount_paid_minor, currency_code, notes, created_at, customers(display_name), restaurant_tables(code), order_items(item_name, quantity)")
+      .eq("location_id", assignment.location_id).order("created_at", { ascending: false }).limit(50),
+  ]);
+  const menuItems = (menuResult.data ?? []).map((item) => ({
+    ...item,
+    menu_categories: Array.isArray(item.menu_categories) ? item.menu_categories[0] ?? null : item.menu_categories,
+  }));
+  const customers = (customersResult.data ?? []).map((customer) => ({ id: customer.id, label: `${customer.display_name}${customer.phone ? ` · ${customer.phone}` : ""}` }));
+  const tables = (tablesResult.data ?? []).map((table) => ({ id: table.id, label: `${table.code} · ${table.capacity} seats · ${table.status}` }));
+
+  return <>
+    <LiveRefresh tables={["orders", "kitchen_tickets"]} />
+    <PageHead eyebrow="Front of house" title="Orders & POS" description="Build orders quickly, send them to the kitchen, record payment, and preserve every sale." />
+    {hasPermission(access.permissions, "orders.create") ? (
+      menuItems.length ? <OrderComposer menuItems={menuItems} customers={customers} tables={tables} /> :
+        <section className="ops-panel"><Empty title="Add the menu before taking orders" body="Create at least one category and available menu item in Menu, then return to the POS." /><Link className="ops-inline-action" href="/management/menu">Open menu management</Link></section>
+    ) : null}
+
+    <section className="ops-panel ops-section-gap">
+      <div className="ops-panel-head"><div><p className="ops-kicker">Order history</p><h2>Recent orders</h2></div><span>{ordersResult.data?.length ?? 0} shown</span></div>
+      <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Order</th><th>Guest / channel</th><th>Items</th><th>Kitchen</th><th>Payment</th><th>Total</th><th>Actions</th></tr></thead><tbody>
+        {(ordersResult.data ?? []).map((order) => {
+          const customer = Array.isArray(order.customers) ? order.customers[0] : order.customers;
+          const table = Array.isArray(order.restaurant_tables) ? order.restaurant_tables[0] : order.restaurant_tables;
+          const balance = Number(order.total_minor) - Number(order.amount_paid_minor);
+          return <tr key={order.id}><td><strong>{order.order_number}</strong><small>{formatDateTime(order.created_at)}</small></td><td>{customer?.display_name ?? "Walk-in guest"}<small>{order.channel.replaceAll("_", " ")}{table?.code ? ` · Table ${table.code}` : ""}</small></td><td>{(order.order_items ?? []).map((item) => `${item.quantity}× ${item.item_name}`).join(", ")}</td><td><span className={`ops-pill is-${order.kitchen_status.toLowerCase()}`}>{order.kitchen_status.replaceAll("_", " ")}</span></td><td><span className={`ops-pill is-${order.payment_status.toLowerCase()}`}>{order.payment_status.replaceAll("_", " ")}</span></td><td><strong>{formatMoney(order.total_minor, order.currency_code)}</strong><small>{balance > 0 ? `${formatMoney(balance)} due` : "Settled"}</small></td><td><div className="ops-row-actions">
+            {balance > 0 && hasPermission(access.permissions, "payments.record") ? <form action={recordOrderPayment} className="ops-inline-form"><input type="hidden" name="order_id" value={order.id} /><input name="amount" type="number" min="0.01" step="0.01" defaultValue={(balance / 100).toFixed(2)} aria-label="Payment amount" /><select name="payment_method" aria-label="Payment method"><option>CASH</option><option>MOMO</option><option>CARD</option><option>ONLINE</option></select><button type="submit">Pay</button></form> : null}
+            {order.payment_status === "PAID" && order.order_status !== "COMPLETED" ? <form action={advanceOrder}><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="action" value="COMPLETE" /><button type="submit">Complete</button></form> : null}
+            {!['COMPLETED','CANCELLED','VOIDED','REFUNDED'].includes(order.order_status) && hasPermission(access.permissions, "orders.cancel_unstarted") ? <form action={advanceOrder}><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="action" value="CANCEL" /><input type="hidden" name="reason" value="Cancelled by authorized staff" /><button className="is-danger" type="submit">Cancel</button></form> : null}
+          </div></td></tr>;
+        })}
+      </tbody></table>{ordersResult.data?.length ? null : <Empty title="No orders recorded" body="Orders created in the POS will remain visible here, including completed and cancelled orders." />}</div>
+    </section>
+  </>;
+}
+
+async function KitchenModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const { data: tickets } = await supabase.from("kitchen_tickets")
+    .select("id, ticket_number, station, priority, status, queued_at, started_at, ready_at, target_seconds, orders(order_number, channel, notes, restaurant_tables(code), order_items(item_name, quantity, notes))")
+    .eq("location_id", assignment.location_id).in("status", ["QUEUED", "PREPARING", "READY"]).order("queued_at");
+  return <>
+    <LiveRefresh tables={["kitchen_tickets", "orders"]} />
+    <PageHead eyebrow="Kitchen display system" title="Kitchen" description="Live tickets are ordered by arrival time. Elapsed time and words—not color alone—surface urgency." />
+    <div className="kds-grid">{(tickets ?? []).map((ticket) => {
+      const order = Array.isArray(ticket.orders) ? ticket.orders[0] : ticket.orders;
+      const table = Array.isArray(order?.restaurant_tables) ? order.restaurant_tables[0] : order?.restaurant_tables;
+      const nextStatus = ticket.status === "QUEUED" ? "PREPARING" : ticket.status === "PREPARING" ? "READY" : "SERVED";
+      const allowed = ticket.status === "QUEUED" ? hasPermission(access.permissions, "kitchen.start_ticket") : hasPermission(access.permissions, "kitchen.ready_ticket");
+      return <article className="kds-ticket" key={ticket.id}><header><div><span>{ticket.station}</span><h2>{ticket.ticket_number}</h2></div><KdsElapsed queuedAt={ticket.queued_at} targetSeconds={ticket.target_seconds} /></header><div className="kds-meta"><span>{order?.channel?.replaceAll("_", " ")}</span><span>{table?.code ? `Table ${table.code}` : "Pickup"}</span><span>{ticket.priority}</span></div><ul>{(order?.order_items ?? []).filter((item) => item).map((item, index) => <li key={`${item.item_name}-${index}`}><b>{item.quantity}×</b><span>{item.item_name}{item.notes ? <small>{item.notes}</small> : null}</span></li>)}</ul>{order?.notes ? <p className="kds-note">Note: {order.notes}</p> : null}<footer><span className={`ops-pill is-${ticket.status.toLowerCase()}`}>{ticket.status}</span>{allowed ? <form action={advanceKitchenTicket}><input type="hidden" name="ticket_id" value={ticket.id} /><input type="hidden" name="next_status" value={nextStatus} /><button type="submit">{nextStatus === "PREPARING" ? "Start" : nextStatus === "READY" ? "Ready" : "Served"}</button></form> : null}</footer></article>;
+    })}{tickets?.length ? null : <Empty title="No active kitchen tickets" body="New orders sent from the POS will appear here automatically." />}</div>
+  </>;
+}
+
+async function TablesModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const { data: tables } = await supabase.from("restaurant_tables").select("*").eq("location_id", assignment.location_id).eq("is_active", true).order("section_name").order("code");
+  return <>
+    <LiveRefresh tables={["restaurant_tables"]} />
+    <PageHead eyebrow="Floor service" title="Tables" description="See capacity and readiness at a glance, then move each table through service and cleaning." />
+    <div className="ops-split-layout"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Floor plan</p><h2>Table status</h2></div><span>{tables?.length ?? 0} tables</span></div><div className="table-grid">{(tables ?? []).map((table) => <article className={`table-card is-${table.status.toLowerCase()}`} key={table.id}><div><span>{table.section_name}</span><h3>{table.code}</h3><p>{table.capacity} seats</p></div><strong>{table.status}</strong><form action={changeRestaurantTableStatus}><input type="hidden" name="table_id" value={table.id} /><select name="status" defaultValue={table.status}><option>AVAILABLE</option><option>OCCUPIED</option><option>RESERVED</option><option>CLEANING</option><option>UNAVAILABLE</option></select><button type="submit">Update</button></form></article>)}{tables?.length ? null : <Empty title="No tables configured" body="Add the first restaurant table to begin dine-in orders and reservations." />}</div></section>
+      {hasPermission(access.permissions, "settings.manage_location") ? <section className="ops-form-card"><p className="ops-kicker">Floor setup</p><h2>Add a table</h2><form action={createRestaurantTable} className="ops-form"><label>Table code<input name="code" required placeholder="T01" /></label><label>Section<input name="section_name" required defaultValue="Main Floor" /></label><label>Capacity<input name="capacity" type="number" min="1" max="50" defaultValue="2" required /></label><FormSubmitButton>Add table</FormSubmitButton></form></section> : null}</div>
+  </>;
+}
+
+async function MenuModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [{ data: categories }, { data: items }] = await Promise.all([
+    supabase.from("menu_categories").select("*").eq("location_id", assignment.location_id).order("sort_order").order("name"),
+    supabase.from("menu_items").select("*, menu_categories(name)").eq("location_id", assignment.location_id).order("name"),
+  ]);
+  return <>
+    <LiveRefresh tables={["menu_items"]} />
+    <PageHead eyebrow="Single source of truth" title="Menu" description="The same live catalog powers POS availability, kitchen routing, recipes, and future website ordering." />
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Catalog</p><h2>Menu items</h2></div><span>{items?.filter((item) => item.is_available).length ?? 0} available</span></div><div className="ops-card-list">{(items ?? []).map((item) => <article className="catalog-row" key={item.id}><div><span>{item.menu_categories?.name ?? "Uncategorized"} · {item.station}</span><h3>{item.name}</h3><p>{item.description || item.sku}</p></div><strong>{formatMoney(item.price_minor, item.currency_code)}</strong><form action={toggleMenuAvailability}><input type="hidden" name="menu_item_id" value={item.id} /><input type="hidden" name="available" value={String(!item.is_available)} /><button className={item.is_available ? "is-danger" : ""} type="submit">{item.is_available ? "Mark sold out" : "Make available"}</button></form></article>)}{items?.length ? null : <Empty title="Your menu is ready to be built" body="Create a category, then add the first priced menu item without inventing duplicate variants." />}</div></section>
+      {hasPermission(access.permissions, "menu.manage_catalog") ? <div className="ops-form-stack"><section className="ops-form-card"><p className="ops-kicker">Structure</p><h2>New category</h2><form action={createMenuCategory} className="ops-form"><label>Name<input name="name" required placeholder="Rice & meals" /></label><label>Description<textarea name="description" rows={2} /></label><label>Sort order<input name="sort_order" type="number" defaultValue="0" /></label><FormSubmitButton>Add category</FormSubmitButton></form></section><section className="ops-form-card"><p className="ops-kicker">Sellable item</p><h2>New menu item</h2><form action={createMenuItem} className="ops-form"><label>Category<select name="category_id" required defaultValue=""><option value="" disabled>Choose category</option>{(categories ?? []).map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label><label>Item name<input name="name" required /></label><div className="ops-form-row"><label>SKU<input name="sku" required /></label><label>Price (GHS)<input name="price" type="number" min="0" step="0.01" required /></label></div><label>Kitchen station<select name="station"><option>MAIN KITCHEN</option><option>GRILL</option><option>PIZZA</option><option>DRINKS</option><option>PASTRY</option></select></label><label>Description<textarea name="description" rows={2} /></label><FormSubmitButton>Add menu item</FormSubmitButton></form></section></div> : null}</div>
+  </>;
+}
+
+async function InventoryModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [{ data: categories }, { data: items }, { data: movements }] = await Promise.all([
+    supabase.from("inventory_categories").select("*").eq("location_id", assignment.location_id).order("name"),
+    supabase.from("inventory_items").select("*, inventory_categories(name)").eq("location_id", assignment.location_id).order("name"),
+    supabase.from("stock_movements").select("*, inventory_items(name)").eq("location_id", assignment.location_id).order("posted_at", { ascending: false }).limit(20),
+  ]);
+  return <>
+    <LiveRefresh tables={["inventory_items"]} />
+    <PageHead eyebrow="Stock control" title="Inventory" description="Every balance change comes from an immutable movement with a reason—never a silent quantity edit." />
+    <section className="ops-metric-grid is-compact"><article className="ops-metric"><span>Active items</span><strong>{items?.filter((item) => item.is_active).length ?? 0}</strong><small>Tracked at this location</small></article><article className="ops-metric"><span>Low stock</span><strong>{items?.filter((item) => Number(item.current_stock) <= Number(item.reorder_level)).length ?? 0}</strong><small>At or below reorder</small></article><article className="ops-metric"><span>Inventory value</span><strong>{formatMoney((items ?? []).reduce((sum, item) => sum + Number(item.current_stock) * Number(item.average_cost_minor), 0))}</strong><small>Estimated average cost</small></article></section>
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">On hand</p><h2>Inventory items</h2></div><span>{items?.length ?? 0} items</span></div><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Item</th><th>Type</th><th>On hand</th><th>Reorder</th><th>Avg. cost</th><th>Storage</th></tr></thead><tbody>{(items ?? []).map((item) => <tr className={Number(item.current_stock) <= Number(item.reorder_level) ? "is-alert-row" : ""} key={item.id}><td><strong>{item.name}</strong><small>{item.sku} · {item.inventory_categories?.name ?? "Uncategorized"}</small></td><td>{item.item_type.replaceAll("_", " ")}</td><td><strong>{item.current_stock} {item.unit}</strong></td><td>{item.reorder_level} {item.unit}</td><td>{formatMoney(item.average_cost_minor)}</td><td>{item.storage_location ?? "—"}</td></tr>)}</tbody></table>{items?.length ? null : <Empty title="No inventory items yet" body="Create the item master first, then post an opening adjustment or purchase receipt." />}</div><div className="ops-panel-head ops-subhead"><div><p className="ops-kicker">Ledger</p><h2>Recent movements</h2></div></div><div className="ops-list">{(movements ?? []).map((movement) => <div className="ops-list-row" key={movement.id}><div><strong>{movement.inventory_items?.name}</strong><small>{movement.movement_type.replaceAll("_", " ")} · {formatDateTime(movement.posted_at)}</small></div><b className={Number(movement.quantity_delta) < 0 ? "is-negative" : "is-positive"}>{Number(movement.quantity_delta) > 0 ? "+" : ""}{movement.quantity_delta} {movement.unit}</b><em>{movement.reason}</em></div>)}{movements?.length ? null : <Empty title="No stock movements" body="Opening stock, purchases, wastage, and adjustments will be preserved here." />}</div></section>
+      <div className="ops-form-stack">{hasPermission(access.permissions, "inventory.manage_items_units") ? <><section className="ops-form-card"><p className="ops-kicker">Item master</p><h2>New inventory item</h2><form action={createInventoryItem} className="ops-form"><label>Category<select name="category_id"><option value="">Uncategorized</option>{(categories ?? []).map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label><label>Item name<input name="name" required /></label><div className="ops-form-row"><label>SKU<input name="sku" required /></label><label>Unit<select name="unit"><option>kg</option><option>g</option><option>litre</option><option>ml</option><option>piece</option><option>bottle</option><option>carton</option><option>bag</option><option>pack</option></select></label></div><label>Type<select name="item_type"><option>RAW_INGREDIENT</option><option>PACKAGED_PRODUCT</option><option>BEVERAGE</option><option>CONSUMABLE</option><option>CLEANING_SUPPLY</option><option>PACKAGING</option><option>OTHER</option></select></label><div className="ops-form-row"><label>Reorder level<input name="reorder_level" type="number" min="0" step="0.001" defaultValue="0" /></label><label>Target stock<input name="target_stock" type="number" min="0" step="0.001" defaultValue="0" /></label></div><label>Storage location<input name="storage_location" placeholder="Dry store" /></label><FormSubmitButton>Add item</FormSubmitButton></form></section><section className="ops-form-card"><p className="ops-kicker">Classification</p><h2>New category</h2><form action={createInventoryCategory} className="ops-form"><label>Name<input name="name" required /></label><FormSubmitButton>Add category</FormSubmitButton></form></section></> : null}
+        {(hasPermission(access.permissions, "inventory.adjust") || hasPermission(access.permissions, "inventory.record_wastage")) ? <section className="ops-form-card"><p className="ops-kicker">Controlled ledger</p><h2>Post stock movement</h2><form action={postStockMovement} className="ops-form"><label>Inventory item<select name="inventory_item_id" required defaultValue=""><option value="" disabled>Choose item</option>{(items ?? []).map((item) => <option value={item.id} key={item.id}>{item.name} · {item.current_stock} {item.unit}</option>)}</select></label><label>Movement type<select name="movement_type"><option>ADJUSTMENT_IN</option><option>ADJUSTMENT_OUT</option><option>WASTAGE</option><option>STAFF_MEAL</option><option>COMPLIMENTARY</option><option>RETURN_TO_SUPPLIER</option></select></label><div className="ops-form-row"><label>Quantity<input name="quantity" type="number" min="0.001" step="0.001" required /></label><label>Unit cost (GHS)<input name="unit_cost" type="number" min="0" step="0.01" /></label></div><label>Reason<textarea name="reason" required minLength={3} rows={2} /></label><FormSubmitButton pendingText="Posting…">Post movement</FormSubmitButton></form></section> : null}</div></div>
+  </>;
+}
+
+async function RecipesModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [recipesResult, menuResult, inventoryResult] = await Promise.all([
+    supabase.from("recipes").select("*, menu_items(name, price_minor), recipe_ingredients(quantity, unit, waste_percentage, inventory_items(name, average_cost_minor))").eq("location_id", assignment.location_id).order("created_at", { ascending: false }),
+    supabase.from("menu_items").select("id, name").eq("location_id", assignment.location_id).eq("is_active", true).order("name"),
+    supabase.from("inventory_items").select("id, name, unit, average_cost_minor").eq("location_id", assignment.location_id).eq("is_active", true).order("name"),
+  ]);
+  return <>
+    <PageHead eyebrow="Recipe control" title="Recipes & costing" description="Define exact ingredient usage without guessed quantities. Cost follows the live inventory average cost." />
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Recipe book</p><h2>Dish recipes</h2></div><span>{recipesResult.data?.length ?? 0} versions</span></div><div className="recipe-list">{(recipesResult.data ?? []).map((recipe) => { const menuItem = Array.isArray(recipe.menu_items) ? recipe.menu_items[0] : recipe.menu_items; const ingredients = (recipe.recipe_ingredients ?? []) as RecipeIngredient[]; const cost = ingredients.reduce((sum: number, ingredient: RecipeIngredient) => { const stock = Array.isArray(ingredient.inventory_items) ? ingredient.inventory_items[0] : ingredient.inventory_items; return sum + Number(ingredient.quantity) * Number(stock?.average_cost_minor ?? 0); }, 0) / Number(recipe.yield_quantity); const price = Number(menuItem?.price_minor ?? 0); return <article key={recipe.id}><header><div><span>Version {recipe.version_number}</span><h3>{recipe.name}</h3><p>{menuItem?.name}</p></div><span className={`ops-pill is-${recipe.status.toLowerCase()}`}>{recipe.status}</span></header><ul>{ingredients.map((ingredient: RecipeIngredient, index: number) => { const stock = Array.isArray(ingredient.inventory_items) ? ingredient.inventory_items[0] : ingredient.inventory_items; return <li key={index}><span>{stock?.name}</span><strong>{ingredient.quantity} {ingredient.unit}</strong></li>; })}</ul><footer><div><span>Estimated portion cost</span><strong>{formatMoney(cost)}</strong></div><div><span>Food cost</span><strong>{price > 0 ? `${((cost / price) * 100).toFixed(1)}%` : "—"}</strong></div>{recipe.status === "DRAFT" && hasPermission(access.permissions, "recipes.publish_version") ? <form action={publishRecipe}><input type="hidden" name="recipe_id" value={recipe.id} /><button type="submit">Publish</button></form> : null}</footer></article>; })}{recipesResult.data?.length ? null : <Empty title="No recipes recorded" body="Choose a menu item and enter its real first ingredient quantity. More ingredients can be versioned as the recipe is finalized." />}</div></section>
+      {hasPermission(access.permissions, "recipes.create_draft") ? <section className="ops-form-card"><p className="ops-kicker">Draft formulation</p><h2>Create recipe</h2><form action={createRecipe} className="ops-form"><label>Menu item<select name="menu_item_id" required defaultValue=""><option value="" disabled>Choose dish</option>{(menuResult.data ?? []).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Recipe name<input name="name" required /></label><label>First ingredient<select name="inventory_item_id" required defaultValue=""><option value="" disabled>Choose inventory item</option>{(inventoryResult.data ?? []).map((item) => <option value={item.id} key={item.id}>{item.name} · {item.unit}</option>)}</select></label><div className="ops-form-row"><label>Ingredient quantity<input name="ingredient_quantity" type="number" min="0.001" step="0.001" required /></label><label>Recipe yield<input name="yield_quantity" type="number" min="0.001" step="0.001" defaultValue="1" required /></label></div><p className="ops-form-note">Enter only the approved kitchen quantity. The system does not invent recipe values.</p><FormSubmitButton>Create draft</FormSubmitButton></form></section> : null}</div>
+  </>;
+}
+
+async function PurchasingModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [ordersResult, suppliersResult, itemsResult] = await Promise.all([
+    supabase.from("purchase_orders").select("*, suppliers(name), purchase_order_lines(item_name, quantity, unit, unit_cost_minor, received_quantity)").eq("location_id", assignment.location_id).order("created_at", { ascending: false }).limit(50),
+    supabase.from("suppliers").select("id, name").eq("location_id", assignment.location_id).eq("is_active", true).order("name"),
+    supabase.from("inventory_items").select("id, name, unit").eq("location_id", assignment.location_id).eq("is_active", true).order("name"),
+  ]);
+  return <>
+    <PageHead eyebrow="Procure to stock" title="Purchasing" description="Issue accountable purchase orders and receive accepted goods as immutable stock movements." />
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Purchase history</p><h2>Purchase orders</h2></div><span>{ordersResult.data?.length ?? 0} orders</span></div><div className="ops-card-list">{(ordersResult.data ?? []).map((order) => { const supplier = Array.isArray(order.suppliers) ? order.suppliers[0] : order.suppliers; const lines = (order.purchase_order_lines ?? []) as PurchaseLine[]; return <article className="purchase-row" key={order.id}><div><span>{order.po_number} · {formatDateTime(order.created_at)}</span><h3>{supplier?.name}</h3><p>{lines.map((line: PurchaseLine) => `${line.quantity} ${line.unit} ${line.item_name}`).join(", ")}</p></div><strong>{formatMoney(order.total_minor, order.currency_code)}</strong><span className={`ops-pill is-${order.status.toLowerCase()}`}>{order.status}</span>{order.status === "ORDERED" && hasPermission(access.permissions, "goods_receipts.record") ? <form action={receivePurchaseOrder}><input type="hidden" name="purchase_order_id" value={order.id} /><button type="submit">Receive goods</button></form> : null}</article>; })}{ordersResult.data?.length ? null : <Empty title="No purchase orders" body="Create the first order after inventory items and a supplier are available." />}</div></section>
+      {hasPermission(access.permissions, "purchase_orders.create_issue") ? <section className="ops-form-card"><p className="ops-kicker">New commitment</p><h2>Issue purchase order</h2><form action={createPurchaseOrder} className="ops-form"><label>Supplier<select name="supplier_id" required defaultValue=""><option value="" disabled>Choose supplier</option>{(suppliersResult.data ?? []).map((supplier) => <option value={supplier.id} key={supplier.id}>{supplier.name}</option>)}</select></label><label>Inventory item<select name="inventory_item_id" required defaultValue=""><option value="" disabled>Choose item</option>{(itemsResult.data ?? []).map((item) => <option value={item.id} key={item.id}>{item.name} · {item.unit}</option>)}</select></label><div className="ops-form-row"><label>Quantity<input name="quantity" type="number" min="0.001" step="0.001" required /></label><label>Unit cost (GHS)<input name="unit_cost" type="number" min="0" step="0.01" required /></label></div><label>Expected delivery<input name="expected_delivery" type="date" /></label><label>Notes<textarea name="notes" rows={2} /></label><FormSubmitButton pendingText="Issuing…">Issue purchase order</FormSubmitButton></form></section> : null}</div>
+  </>;
+}
+
+async function SuppliersModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const { data: suppliers } = await supabase.from("suppliers").select("*").eq("location_id", assignment.location_id).order("name");
+  return <>
+    <PageHead eyebrow="Supply network" title="Suppliers" description="Keep commercial contacts and terms attached to the purchasing history they support." />
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Supplier directory</p><h2>Active suppliers</h2></div><span>{suppliers?.filter((supplier) => supplier.is_active).length ?? 0} active</span></div><div className="supplier-grid">{(suppliers ?? []).map((supplier) => <article key={supplier.id}><span>{supplier.code}</span><h3>{supplier.name}</h3><p>{supplier.contact_person || "No contact person"}</p><dl><div><dt>Phone</dt><dd>{supplier.phone || "—"}</dd></div><div><dt>Email</dt><dd>{supplier.email || "—"}</dd></div><div><dt>Terms</dt><dd>{supplier.payment_terms || "—"}</dd></div></dl></article>)}{suppliers?.length ? null : <Empty title="No suppliers recorded" body="Add the first approved supplier before creating a purchase order." />}</div></section>
+      {hasPermission(access.permissions, "suppliers.manage") ? <section className="ops-form-card"><p className="ops-kicker">Supplier master</p><h2>Add supplier</h2><form action={createSupplier} className="ops-form"><div className="ops-form-row"><label>Code<input name="code" required /></label><label>Supplier name<input name="name" required /></label></div><label>Contact person<input name="contact_person" /></label><div className="ops-form-row"><label>Phone<input name="phone" type="tel" /></label><label>Email<input name="email" type="email" /></label></div><label>Payment terms<input name="payment_terms" placeholder="e.g. 30 days" /></label><label>Notes<textarea name="notes" rows={3} /></label><FormSubmitButton>Add supplier</FormSubmitButton></form></section> : null}</div>
+  </>;
+}
+
+async function CustomersModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const { data: customers } = await supabase.from("customers").select("*, orders(id, total_minor, created_at)").eq("location_id", assignment.location_id).order("created_at", { ascending: false }).limit(100);
+  return <>
+    <PageHead eyebrow="Guest relationships" title="Customers" description="Useful guest details, consent, and genuine order history—without unnecessary personal data." />
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Customer directory</p><h2>Guest profiles</h2></div><span>{customers?.length ?? 0} customers</span></div><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Customer</th><th>Contact</th><th>Orders</th><th>Total spend</th><th>Last order</th><th>Consent</th></tr></thead><tbody>{(customers ?? []).map((customer) => { const orders = (customer.orders ?? []) as CustomerOrder[]; const mostRecentOrder = orders.toSorted((a: CustomerOrder, b: CustomerOrder) => b.created_at.localeCompare(a.created_at))[0]; return <tr key={customer.id}><td><strong>{customer.display_name}</strong><small>{customer.notes || "No notes"}</small></td><td>{customer.phone || "—"}<small>{customer.email || ""}</small></td><td>{orders.length}</td><td>{formatMoney(orders.reduce((sum: number, order: CustomerOrder) => sum + Number(order.total_minor), 0))}</td><td>{mostRecentOrder ? formatDateTime(mostRecentOrder.created_at) : "—"}</td><td>{customer.marketing_consent ? "Granted" : "Not granted"}</td></tr>; })}</tbody></table>{customers?.length ? null : <Empty title="No customer profiles" body="Create a profile from a phone, WhatsApp, reservation, or returning guest interaction." />}</div></section>
+      {hasPermission(access.permissions, "customers.create_update_basic") ? <section className="ops-form-card"><p className="ops-kicker">New guest</p><h2>Create customer</h2><form action={createCustomer} className="ops-form"><label>Display name<input name="display_name" required /></label><div className="ops-form-row"><label>Phone<input name="phone" type="tel" /></label><label>Email<input name="email" type="email" /></label></div><label>Notes<textarea name="notes" rows={3} /></label><label className="ops-check"><input name="marketing_consent" type="checkbox" /> Customer explicitly agreed to marketing</label><FormSubmitButton>Create customer</FormSubmitButton></form></section> : null}</div>
+  </>;
+}
+
+async function ReservationsModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [reservationsResult, tablesResult, customersResult] = await Promise.all([
+    supabase.from("reservations").select("*, restaurant_tables(code)").eq("location_id", assignment.location_id).order("starts_at").limit(100),
+    supabase.from("restaurant_tables").select("id, code, capacity, status").eq("location_id", assignment.location_id).eq("is_active", true).order("code"),
+    supabase.from("customers").select("id, display_name").eq("location_id", assignment.location_id).eq("is_active", true).order("display_name"),
+  ]);
+  return <>
+    <LiveRefresh tables={["restaurant_tables"]} />
+    <PageHead eyebrow="Bookings" title="Reservations" description="Confirm bookings, assign tables without double-booking, and follow every guest through arrival or no-show." />
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Reservation book</p><h2>Upcoming & recent</h2></div><span>{reservationsResult.data?.length ?? 0} bookings</span></div><div className="reservation-list">{(reservationsResult.data ?? []).map((reservation) => <article key={reservation.id}><div className="reservation-time"><strong>{new Intl.DateTimeFormat("en-GH", { timeZone: "Africa/Accra", month: "short", day: "2-digit" }).format(new Date(reservation.starts_at))}</strong><span>{new Intl.DateTimeFormat("en-GH", { timeZone: "Africa/Accra", hour: "2-digit", minute: "2-digit" }).format(new Date(reservation.starts_at))}</span></div><div><h3>{reservation.guest_name}</h3><p>{reservation.party_size} guests · {reservation.restaurant_tables?.code ? `Table ${reservation.restaurant_tables.code}` : "Table unassigned"} · {reservation.guest_phone}</p></div><span className={`ops-pill is-${reservation.status.toLowerCase()}`}>{reservation.status}</span>{hasPermission(access.permissions, "reservations.create_update") ? <form action={updateReservationStatus}><input type="hidden" name="reservation_id" value={reservation.id} /><select name="status" defaultValue={reservation.status}><option>REQUESTED</option><option>CONFIRMED</option><option>SEATED</option><option>COMPLETED</option><option>CANCELLED</option><option>NO_SHOW</option></select><button type="submit">Update</button></form> : null}</article>)}{reservationsResult.data?.length ? null : <Empty title="No reservations" body="Bookings created here will be protected against overlapping use of the same table." />}</div></section>
+      {hasPermission(access.permissions, "reservations.create_update") ? <section className="ops-form-card"><p className="ops-kicker">New booking</p><h2>Create reservation</h2><form action={createReservation} className="ops-form"><label>Guest name<input name="guest_name" required /></label><label>Phone<input name="guest_phone" type="tel" required /></label><label>Existing customer<select name="customer_id"><option value="">No linked profile</option>{(customersResult.data ?? []).map((customer) => <option value={customer.id} key={customer.id}>{customer.display_name}</option>)}</select></label><div className="ops-form-row"><label>Date & time<input name="starts_at" type="datetime-local" required /></label><label>Duration (minutes)<input name="duration" type="number" min="30" step="30" defaultValue="120" /></label></div><div className="ops-form-row"><label>Party size<input name="party_size" type="number" min="1" max="50" defaultValue="2" required /></label><label>Table<select name="table_id"><option value="">Assign later</option>{(tablesResult.data ?? []).map((table) => <option value={table.id} key={table.id}>{table.code} · {table.capacity} seats</option>)}</select></label></div><label>Source<select name="source"><option>PHONE</option><option>WHATSAPP</option><option>WEBSITE</option><option>WALK_IN</option><option>STAFF</option></select></label><label>Occasion<input name="occasion" /></label><label>Notes<textarea name="notes" rows={2} /></label><FormSubmitButton>Create reservation</FormSubmitButton></form></section> : null}</div>
+  </>;
+}
+
+async function StaffModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [employmentResult, assignmentsResult, shiftsResult] = await Promise.all([
+    supabase.from("staff_employments").select("id, profile_id, employee_number, start_date, is_active, profiles(display_name, phone)").eq("organization_id", assignment.organization_id).order("created_at"),
+    supabase.from("user_role_assignments").select("profile_id, revoked_at, roles(code, name)").eq("organization_id", assignment.organization_id).is("revoked_at", null),
+    supabase.from("staff_shifts").select("*, staff_employments(employee_number, profiles(display_name))").eq("location_id", assignment.location_id).order("starts_at", { ascending: false }).limit(50),
+  ]);
+  return <>
+    <PageHead eyebrow="People & access" title="Staff" description="Operational employment, role assignments, and shifts. Payroll is intentionally outside this system." />
+    <section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Team directory</p><h2>Staff access</h2></div><span>{employmentResult.data?.filter((row) => row.is_active).length ?? 0} active</span></div><div className="staff-grid">{(employmentResult.data ?? []).map((employment) => { const profile = Array.isArray(employment.profiles) ? employment.profiles[0] : employment.profiles; const roleAssignment = (assignmentsResult.data ?? []).find((row) => row.profile_id === employment.profile_id); const role = Array.isArray(roleAssignment?.roles) ? roleAssignment.roles[0] : roleAssignment?.roles; return <article key={employment.id}><span className="ops-avatar">{profile?.display_name?.split(" ").map((part: string) => part[0]).slice(0,2).join("")}</span><div><h3>{profile?.display_name}</h3><p>{employment.employee_number} · Started {employment.start_date}</p><strong>{role?.name ?? "No active role"}</strong></div>{hasPermission(access.permissions, "security.manage_users_roles") ? <form action={changeStaffRole}><input type="hidden" name="profile_id" value={employment.profile_id} /><select name="role_code" defaultValue={role?.code ?? "RECEPTIONIST"}><option>RECEPTIONIST</option><option>MANAGER</option><option>OWNER</option></select><button type="submit">Change role</button></form> : null}</article>; })}</div></section>
+    <div className="ops-split-layout ops-section-gap"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Schedule</p><h2>Recent shifts</h2></div></div><div className="ops-list">{(shiftsResult.data ?? []).map((shift) => { const employment = Array.isArray(shift.staff_employments) ? shift.staff_employments[0] : shift.staff_employments; const profile = Array.isArray(employment?.profiles) ? employment.profiles[0] : employment?.profiles; return <div className="ops-list-row" key={shift.id}><div><strong>{profile?.display_name}</strong><small>{formatDateTime(shift.starts_at)} → {formatDateTime(shift.ends_at)}</small></div><em>{shift.status}</em></div>; })}{shiftsResult.data?.length ? null : <Empty title="No shifts scheduled" body="Schedule the first operational shift for an active staff member." />}</div></section>
+      {hasPermission(access.permissions, "staff.manage_shifts_attendance") ? <section className="ops-form-card"><p className="ops-kicker">Schedule</p><h2>Add shift</h2><form action={createStaffShift} className="ops-form"><label>Staff member<select name="employment_id" required>{(employmentResult.data ?? []).filter((employment) => employment.is_active).map((employment) => { const profile = Array.isArray(employment.profiles) ? employment.profiles[0] : employment.profiles; return <option value={employment.id} key={employment.id}>{profile?.display_name} · {employment.employee_number}</option>; })}</select></label><label>Starts<input name="starts_at" type="datetime-local" required /></label><label>Ends<input name="ends_at" type="datetime-local" required /></label><label>Notes<textarea name="notes" rows={2} /></label><FormSubmitButton>Schedule shift</FormSubmitButton></form></section> : null}</div>
+  </>;
+}
+
+async function FinanceModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const today = businessDate();
+  const [paymentsResult, expensesResult, closesResult] = await Promise.all([
+    supabase.from("payments").select("*, orders(order_number)").eq("location_id", assignment.location_id).order("received_at", { ascending: false }).limit(50),
+    supabase.from("expenses").select("*").eq("location_id", assignment.location_id).order("incurred_on", { ascending: false }).limit(50),
+    supabase.from("daily_closes").select("*").eq("location_id", assignment.location_id).order("business_date", { ascending: false }).limit(30),
+  ]);
+  const paymentsToday = (paymentsResult.data ?? []).filter((payment) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Accra" }).format(new Date(payment.received_at)) === today);
+  const totalToday = paymentsToday.reduce((sum, payment) => sum + Number(payment.amount_minor), 0);
+  const expensesToday = (expensesResult.data ?? []).filter((expense) => expense.incurred_on === today).reduce((sum, expense) => sum + Number(expense.amount_minor), 0);
+  return <>
+    <PageHead eyebrow="Transaction-driven finance" title="Finance" description="Revenue comes from successful payments; expenses and daily close reconcile against those source transactions." />
+    <section className="ops-metric-grid is-compact"><article className="ops-metric is-featured"><span>Collected today</span><strong>{formatMoney(totalToday)}</strong><small>{paymentsToday.length} payments</small></article><article className="ops-metric"><span>Expenses today</span><strong>{formatMoney(expensesToday)}</strong><small>Posted operating costs</small></article><article className="ops-metric"><span>Net cashflow signal</span><strong>{formatMoney(totalToday - expensesToday)}</strong><small>Before inventory liabilities</small></article></section>
+    <div className="ops-dashboard-columns"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Settlements</p><h2>Recent payments</h2></div></div><div className="ops-list">{(paymentsResult.data ?? []).map((payment) => { const order = Array.isArray(payment.orders) ? payment.orders[0] : payment.orders; return <div className="ops-list-row" key={payment.id}><div><strong>{order?.order_number}</strong><small>{payment.payment_method} · {formatDateTime(payment.received_at)}</small></div><b>{formatMoney(payment.amount_minor, payment.currency_code)}</b><em>{payment.status}</em></div>; })}{paymentsResult.data?.length ? null : <Empty title="No payments recorded" body="Successful order payments will appear here automatically." />}</div></section><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Operating costs</p><h2>Recent expenses</h2></div></div><div className="ops-list">{(expensesResult.data ?? []).map((expense) => <div className="ops-list-row" key={expense.id}><div><strong>{expense.category}</strong><small>{expense.vendor || "No vendor"} · {expense.incurred_on}</small></div><b>{formatMoney(expense.amount_minor, expense.currency_code)}</b><em>{expense.status}</em></div>)}{expensesResult.data?.length ? null : <Empty title="No expenses recorded" body="Posted operating expenses will remain visible here." />}</div></section></div>
+    <div className="ops-split-layout ops-section-gap">{hasPermission(access.permissions, "expenses.create") ? <section className="ops-form-card"><p className="ops-kicker">Operational expense</p><h2>Record expense</h2><form action={createExpense} className="ops-form"><div className="ops-form-row"><label>Category<input name="category" required placeholder="Utilities" /></label><label>Amount (GHS)<input name="amount" type="number" min="0.01" step="0.01" required /></label></div><div className="ops-form-row"><label>Payment method<select name="payment_method"><option>CASH</option><option>MOMO</option><option>CARD</option><option>ONLINE</option></select></label><label>Date<input name="incurred_on" type="date" defaultValue={today} required /></label></div><label>Vendor<input name="vendor" /></label><label>Description<textarea name="description" rows={2} required /></label><FormSubmitButton>Record expense</FormSubmitButton></form></section> : null}<section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Reconciliation</p><h2>Daily close</h2></div>{hasPermission(access.permissions, "daily_close.prepare") ? <form action={prepareDailyClose} className="ops-inline-form"><input name="business_date" type="date" defaultValue={today} /><button type="submit">Refresh close</button></form> : null}</div><div className="ops-list">{(closesResult.data ?? []).map((close) => <div className="ops-list-row" key={close.id}><div><strong>{close.business_date}</strong><small>{close.orders_count} orders · {formatMoney(close.expenses_minor)} expenses</small></div><b>{formatMoney(close.net_sales_minor)}</b><em>{close.status}</em></div>)}{closesResult.data?.length ? null : <Empty title="No daily close prepared" body="Refresh today’s close to derive payment and expense totals from source transactions." />}</div></section></div>
+  </>;
+}
+
+async function ReportsModule(session: Session, query: Query) {
+  const { supabase, assignment } = session;
+  const to = query.to && /^\d{4}-\d{2}-\d{2}$/.test(query.to) ? query.to : businessDate();
+  const defaultFrom = new Date(`${to}T00:00:00Z`); defaultFrom.setUTCDate(defaultFrom.getUTCDate() - 29);
+  const from = query.from && /^\d{4}-\d{2}-\d{2}$/.test(query.from) ? query.from : businessDate(defaultFrom);
+  const { data } = await supabase.rpc("get_report_summary", { p_organization_id: assignment.organization_id, p_location_id: assignment.location_id, p_from_date: from, p_to_date: to });
+  const report = (data && typeof data === "object" ? data : {}) as { orders?: number; gross_sales_minor?: number; payments_minor?: number; expenses_minor?: number; sales_by_channel?: Array<{ channel: string; orders: number; sales_minor: number }>; payments_by_method?: Array<{ method: string; amount_minor: number }>; top_items?: Array<{ name: string; quantity: number; sales_minor: number }> };
+  return <>
+    <PageHead eyebrow="Live operational facts" title="Reports" description="Every number is calculated from restaurant transactions in the selected date range—no fake analytics." action={<form className="ops-date-filter" method="get"><label>From<input name="from" type="date" defaultValue={from} /></label><label>To<input name="to" type="date" defaultValue={to} /></label><button type="submit">Run report</button></form>} />
+    <section className="ops-metric-grid is-compact"><article className="ops-metric"><span>Orders</span><strong>{report.orders ?? 0}</strong><small>{from} to {to}</small></article><article className="ops-metric"><span>Gross sales</span><strong>{formatMoney(report.gross_sales_minor)}</strong><small>Excludes cancelled and voided</small></article><article className="ops-metric is-featured"><span>Successful payments</span><strong>{formatMoney(report.payments_minor)}</strong><small>Collected revenue</small></article><article className="ops-metric"><span>Posted expenses</span><strong>{formatMoney(report.expenses_minor)}</strong><small>Operational costs</small></article></section>
+    <div className="ops-report-grid"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Sales mix</p><h2>By channel</h2></div></div><div className="report-bars">{(report.sales_by_channel ?? []).map((row) => <div key={row.channel}><span>{row.channel.replaceAll("_", " ")}<small>{row.orders} orders</small></span><strong>{formatMoney(row.sales_minor)}</strong></div>)}{report.sales_by_channel?.length ? null : <Empty title="No channel data" body="Sales by channel will populate when orders exist in this period." />}</div></section><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Settlement mix</p><h2>By payment method</h2></div></div><div className="report-bars">{(report.payments_by_method ?? []).map((row) => <div key={row.method}><span>{row.method}</span><strong>{formatMoney(row.amount_minor)}</strong></div>)}{report.payments_by_method?.length ? null : <Empty title="No payment data" body="Successful payments will populate this report." />}</div></section><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Menu performance</p><h2>Top items</h2></div></div><div className="report-bars">{(report.top_items ?? []).map((row, index) => <div key={row.name}><span><b>{String(index + 1).padStart(2, "0")}</b>{row.name}<small>{row.quantity} sold</small></span><strong>{formatMoney(row.sales_minor)}</strong></div>)}{report.top_items?.length ? null : <Empty title="No item sales" body="Top items will appear once orders are recorded in this period." />}</div></section></div>
+  </>;
+}
+
+async function SettingsModule(session: Session) {
+  const { supabase, assignment, access } = session;
+  const [organizationResult, locationResult, settingsResult, auditResult] = await Promise.all([
+    supabase.from("organizations").select("*").eq("id", assignment.organization_id).single(),
+    supabase.from("locations").select("*").eq("id", assignment.location_id).single(),
+    supabase.from("operational_settings").select("*").eq("location_id", assignment.location_id).order("setting_key"),
+    supabase.from("audit_events").select("id, action, entity_type, entity_id, actor_role_codes, reason, occurred_at").eq("location_id", assignment.location_id).order("occurred_at", { ascending: false }).limit(50),
+  ]);
+  const organization = organizationResult.data;
+  const location = locationResult.data;
+  return <>
+    <PageHead eyebrow="Restaurant administration" title="Settings" description="Control the live restaurant profile and preserve an accountable record of sensitive changes." />
+    <div className="ops-split-layout">{hasPermission(access.permissions, "settings.manage_location") ? <section className="ops-form-card"><p className="ops-kicker">Restaurant profile</p><h2>Business & location</h2><form action={updateRestaurantProfile} className="ops-form"><label>Business name<input name="trading_name" defaultValue={organization?.trading_name ?? "Adee's Food"} required /></label><label>Location name<input name="location_name" defaultValue={location?.name ?? "Main Branch"} required /></label><div className="ops-form-row"><label>Currency<input name="currency_code" defaultValue={organization?.default_currency_code ?? "GHS"} maxLength={3} required /></label><label>Timezone<input name="timezone" defaultValue={location?.timezone ?? "Africa/Accra"} required /></label></div><div className="ops-form-row"><label>Phone<input name="phone" defaultValue={location?.phone ?? ""} /></label><label>Email<input name="email" type="email" defaultValue={location?.email ?? ""} /></label></div><label>Address<input name="address" defaultValue={location?.address_line_1 ?? ""} /></label><FormSubmitButton>Save restaurant profile</FormSubmitButton></form></section> : null}{hasPermission(access.permissions, "settings.manage_financial_security") ? <section className="ops-form-card"><p className="ops-kicker">Controlled preferences</p><h2>Operational setting</h2><form action={saveOperationalSetting} className="ops-form"><label>Setting key<select name="setting_key"><option value="orders.discount_limit_percent">Discount limit (%)</option><option value="inventory.low_stock_alerts">Low-stock alerts</option><option value="finance.service_charge_percent">Service charge (%)</option><option value="reservations.default_duration_minutes">Reservation duration (minutes)</option><option value="kitchen.target_minutes">Kitchen target (minutes)</option></select></label><label>Value<input name="setting_value" required /></label><label>Description<textarea name="description" rows={2} /></label><FormSubmitButton>Save setting</FormSubmitButton></form><div className="setting-list">{(settingsResult.data ?? []).map((setting) => <div key={setting.id}><strong>{setting.setting_key}</strong><span>{String(setting.setting_value?.value ?? "")}</span></div>)}</div></section> : null}</div>
+    <section className="ops-panel ops-section-gap"><div className="ops-panel-head"><div><p className="ops-kicker">Security evidence</p><h2>Audit log</h2></div><span>{auditResult.data?.length ?? 0} recent events</span></div>{hasPermission(access.permissions, "audit.view_location") || hasPermission(access.permissions, "audit.view_all") ? <div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Role</th><th>Reason</th></tr></thead><tbody>{(auditResult.data ?? []).map((event) => <tr key={event.id}><td>{formatDateTime(event.occurred_at)}</td><td><strong>{event.action}</strong></td><td>{event.entity_type}<small>{event.entity_id}</small></td><td>{event.actor_role_codes?.join(", ") || "System"}</td><td>{event.reason || "—"}</td></tr>)}</tbody></table>{auditResult.data?.length ? null : <Empty title="No audit events visible" body="Sensitive changes will be recorded here with actor, entity, and timestamp." />}</div> : <Empty title="Audit log restricted" body="Your role can manage permitted location settings but cannot inspect audit evidence." />}</section>
+  </>;
+}

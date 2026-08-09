@@ -1,170 +1,105 @@
-import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { managementModules, parseAccessContext } from "@/lib/access";
-import { createClient } from "@/lib/supabase/server";
-import { signOutStaff } from "./actions";
+import { LiveRefresh } from "@/components/management/LiveRefresh";
+import { canAccessModule, managementModules } from "@/lib/access";
+import { businessDate, formatDateTime, formatMoney, getManagementSession } from "@/lib/management";
 
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "Management System — Adee's Food",
-  description: "Secure restaurant operations for authorized Adee's Food staff.",
-  robots: { index: false, follow: false },
+type DashboardMetrics = {
+  sales_minor: number;
+  orders_today: number;
+  active_orders: number;
+  preparing_orders: number;
+  ready_orders: number;
+  reservations_today: number;
+  occupied_tables: number;
+  available_tables: number;
+  low_stock_items: number;
+  expenses_minor: number;
 };
 
-export default async function ManagementPage() {
-  const supabase = await createClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const claims = claimsData?.claims;
+const emptyMetrics: DashboardMetrics = {
+  sales_minor: 0,
+  orders_today: 0,
+  active_orders: 0,
+  preparing_orders: 0,
+  ready_orders: 0,
+  reservations_today: 0,
+  occupied_tables: 0,
+  available_tables: 0,
+  low_stock_items: 0,
+  expenses_minor: 0,
+};
 
-  if (!claims) redirect("/staff/login?error=session-required");
-
-  const [{ data: accessData }, { data: profile }, { data: assurance }] = await Promise.all([
-    supabase.rpc("get_my_access_context"),
-    supabase.from("profiles").select("display_name").eq("id", String(claims.sub)).maybeSingle(),
-    supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { supabase, access, assignment, displayName } = await getManagementSession();
+  const query = await searchParams;
+  const today = businessDate();
+  const [{ data: metricData }, { data: recentOrders }, { data: kitchenTickets }] = await Promise.all([
+    supabase.rpc("get_dashboard_metrics", {
+      p_organization_id: assignment.organization_id,
+      p_location_id: assignment.location_id,
+      p_business_date: today,
+    }),
+    supabase.from("orders").select("id, order_number, channel, total_minor, order_status, created_at")
+      .eq("location_id", assignment.location_id).order("created_at", { ascending: false }).limit(5),
+    supabase.from("kitchen_tickets").select("id, ticket_number, status, queued_at")
+      .eq("location_id", assignment.location_id).in("status", ["QUEUED", "PREPARING", "READY"])
+      .order("queued_at", { ascending: true }).limit(4),
   ]);
-
-  const access = parseAccessContext(accessData);
-  if (access.assignments.length === 0) redirect("/staff/login?error=no-access");
-
-  const primaryAssignment = access.assignments[0];
-  const email = typeof claims.email === "string" ? claims.email : "Authorized staff";
-  const profileName = typeof profile?.display_name === "string" ? profile.display_name : null;
-  const displayName: string = profileName ?? email.split("@")[0];
+  const metrics = metricData && typeof metricData === "object" ? { ...emptyMetrics, ...(metricData as Partial<DashboardMetrics>) } : emptyMetrics;
   const firstName = displayName.split(" ")[0];
-  const initials = displayName
-    .split(" ")
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-  const assuranceLevel = assurance?.currentLevel === "aal2" ? "MFA verified" : "Password verified";
+  const moduleLinks = managementModules.filter((module) => module.slug && canAccessModule(access.permissions, module));
 
   return (
-    <main className="management-page">
-      <aside className="management-sidebar">
-        <Link className="management-brand" href="/" aria-label="Adee's Food website">
-          <Image src="/brand/adees-logo.webp" alt="" width={640} height={640} priority />
-          <span>
-            Adee&apos;s Food
-            <small>Management</small>
-          </span>
-        </Link>
+    <>
+      <LiveRefresh tables={["orders", "kitchen_tickets", "restaurant_tables", "inventory_items"]} />
+      <section className="ops-page-head">
+        <div><p className="ops-kicker">Dashboard · {today}</p><h1>Good to see you, {firstName}.</h1><p>Here is what is happening across today&apos;s service.</p></div>
+        <Link className="ops-head-action" href="/management/orders">Create order <span>＋</span></Link>
+      </section>
+      {query.error ? <div className="ops-alert is-error">Your current role cannot open that module.</div> : null}
 
-        <nav className="management-nav" aria-label="Management navigation">
-          <a className="is-active" href="#overview">
-            <span>01</span> Overview
-          </a>
-          <a href="#modules">
-            <span>02</span> Operations
-          </a>
-          <a href="#access">
-            <span>03</span> Access profile
-          </a>
-        </nav>
+      <section className="ops-metric-grid" aria-label="Today at a glance">
+        <article className="ops-metric is-featured"><span>Sales today</span><strong>{formatMoney(metrics.sales_minor)}</strong><small>Successful payments</small></article>
+        <article className="ops-metric"><span>Orders today</span><strong>{metrics.orders_today}</strong><small>{metrics.active_orders} active now</small></article>
+        <article className="ops-metric"><span>Kitchen</span><strong>{metrics.preparing_orders}</strong><small>{metrics.ready_orders} ready for handoff</small></article>
+        <article className="ops-metric"><span>Reservations</span><strong>{metrics.reservations_today}</strong><small>Expected today</small></article>
+        <article className="ops-metric"><span>Tables</span><strong>{metrics.occupied_tables}</strong><small>{metrics.available_tables} available</small></article>
+        <article className={`ops-metric${metrics.low_stock_items > 0 ? " is-warning" : ""}`}><span>Stock alerts</span><strong>{metrics.low_stock_items}</strong><small>At or below reorder level</small></article>
+      </section>
 
-        <div className="sidebar-status">
-          <span aria-hidden="true" />
-          <div>
-            <p>Backend connected</p>
-            <small>Supabase · Live</small>
+      <div className="ops-dashboard-columns">
+        <section className="ops-panel">
+          <div className="ops-panel-head"><div><p className="ops-kicker">Live service</p><h2>Recent orders</h2></div><Link href="/management/orders">View all</Link></div>
+          <div className="ops-list">
+            {(recentOrders ?? []).length ? (recentOrders ?? []).map((order) => (
+              <Link className="ops-list-row" href="/management/orders" key={order.id}>
+                <span className="ops-status-dot" /><div><strong>{order.order_number}</strong><small>{order.channel.replaceAll("_", " ")} · {formatDateTime(order.created_at)}</small></div>
+                <b>{formatMoney(order.total_minor)}</b><em>{order.order_status.replaceAll("_", " ")}</em>
+              </Link>
+            )) : <div className="ops-empty"><strong>No orders yet today</strong><p>Create the first order when service begins.</p></div>}
           </div>
-        </div>
-      </aside>
+        </section>
 
-      <section className="management-workspace">
-        <header className="management-topbar">
-          <div>
-            <p>{primaryAssignment.organization_name}</p>
-            <span>{primaryAssignment.location_name ?? "All locations"}</span>
+        <section className="ops-panel">
+          <div className="ops-panel-head"><div><p className="ops-kicker">Kitchen pulse</p><h2>Active tickets</h2></div><Link href="/management/kitchen">Open KDS</Link></div>
+          <div className="ops-list">
+            {(kitchenTickets ?? []).length ? (kitchenTickets ?? []).map((ticket) => (
+              <Link className="ops-list-row is-compact" href="/management/kitchen" key={ticket.id}>
+                <div><strong>{ticket.ticket_number}</strong><small>Queued {formatDateTime(ticket.queued_at)}</small></div><em>{ticket.status}</em>
+              </Link>
+            )) : <div className="ops-empty"><strong>Kitchen is clear</strong><p>New tickets will appear here automatically.</p></div>}
           </div>
-          <div className="staff-identity">
-            <span className="staff-avatar" aria-hidden="true">{initials}</span>
-            <div>
-              <strong>{displayName}</strong>
-              <small>{primaryAssignment.role_name}</small>
-            </div>
-            <form action={signOutStaff}>
-              <button type="submit">Sign out</button>
-            </form>
-          </div>
-        </header>
+        </section>
+      </div>
 
-        <div className="management-content">
-          <section className="management-hero" id="overview">
-            <div>
-              <p className="management-eyebrow">Operations overview</p>
-              <h1>Good to see you, {firstName}.</h1>
-              <p>
-                Your secure Adee&apos;s Food workspace is connected. Modules appear according to your live role permissions.
-              </p>
-            </div>
-            <div className="management-date-card">
-              <span>Access scope</span>
-              <strong>{primaryAssignment.role_code}</strong>
-              <small>{primaryAssignment.location_name ?? "Organization-wide"}</small>
-            </div>
-          </section>
-
-          <section className="system-strip" aria-label="System status">
-            <div>
-              <span className="status-dot" aria-hidden="true" />
-              <p><strong>Database</strong><small>Connected</small></p>
-            </div>
-            <div>
-              <p><strong>{access.permissions.length}</strong><small>Granted permissions</small></p>
-            </div>
-            <div>
-              <p><strong>{assuranceLevel}</strong><small>Session security</small></p>
-            </div>
-          </section>
-
-          <section className="management-modules" id="modules" aria-labelledby="modules-title">
-            <div className="section-heading">
-              <div>
-                <p className="management-eyebrow">Role-aware workspace</p>
-                <h2 id="modules-title">Management modules</h2>
-              </div>
-              <span>{primaryAssignment.role_name} access</span>
-            </div>
-
-            <div className="module-grid">
-              {managementModules.map((module) => {
-                const hasAccess = access.permissions.some((permission) =>
-                  permission.startsWith(module.permissionPrefix),
-                );
-
-                return (
-                  <article className={`module-card${hasAccess ? "" : " is-locked"}`} key={module.name}>
-                    <div className="module-card-top">
-                      <span>{module.marker}</span>
-                      <i aria-hidden="true">{hasAccess ? "↗" : "—"}</i>
-                    </div>
-                    <h3>{module.name}</h3>
-                    <p>{module.description}</p>
-                    <small>{hasAccess ? "Access approved · Module setup next" : "Not included in your role"}</small>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="access-panel" id="access" aria-labelledby="access-title">
-            <div>
-              <p className="management-eyebrow">Authenticated identity</p>
-              <h2 id="access-title">Your access profile</h2>
-            </div>
-            <dl>
-              <div><dt>Email</dt><dd>{email}</dd></div>
-              <div><dt>Business</dt><dd>{primaryAssignment.organization_name}</dd></div>
-              <div><dt>Location</dt><dd>{primaryAssignment.location_name ?? "All locations"}</dd></div>
-              <div><dt>Role</dt><dd>{primaryAssignment.role_name}</dd></div>
-            </dl>
-          </section>
+      <section className="ops-module-launcher">
+        <div className="ops-panel-head"><div><p className="ops-kicker">Your workspace</p><h2>Management modules</h2></div><span>{assignment.role_name} access</span></div>
+        <div className="ops-launch-grid">
+          {moduleLinks.map((module) => (
+            <Link href={`/management/${module.slug}`} key={module.slug}><span>{module.marker}</span><h3>{module.name}</h3><p>{module.description}</p><i aria-hidden="true">↗</i></Link>
+          ))}
         </div>
       </section>
-    </main>
+    </>
   );
 }
