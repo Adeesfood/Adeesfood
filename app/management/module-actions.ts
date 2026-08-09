@@ -242,12 +242,18 @@ export async function recordOrderPayment(formData: FormData) {
 }
 
 export async function advanceOrder(formData: FormData) {
-  await perform("orders", "Order workflow updated.", async () => {
-    const required = value(formData, "action") === "CANCEL" ? "orders.cancel_unstarted" : "orders.update_draft";
+  const action = value(formData, "action");
+  const success = action === "SEND_KITCHEN" ? "Online order accepted and sent to the kitchen." : "Order workflow updated.";
+  await perform("orders", success, async () => {
+    const required = action === "CANCEL"
+      ? "orders.cancel_unstarted"
+      : action === "SEND_KITCHEN"
+        ? "orders.send_kitchen"
+        : "orders.update_draft";
     const { supabase } = await context(required);
     const { error } = await supabase.rpc("advance_order", {
       p_order_id: value(formData, "order_id"),
-      p_action: value(formData, "action"),
+      p_action: action,
       p_reason: optionalValue(formData, "reason"),
     });
     if (error) throw error;

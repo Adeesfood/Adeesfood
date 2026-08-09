@@ -111,3 +111,82 @@ test("seeds the production menu as structured Supabase catalog data", async () =
   assert.match(moduleActions, /menu_item_categories/);
   assert.match(modulePage, /order_item_modifiers\(option_name\)/);
 });
+
+test("connects the public menu and checkout to managed online orders", async () => {
+  const [
+    migration,
+    menuPage,
+    publicMenu,
+    orderAction,
+    header,
+    hero,
+    reveal,
+    footer,
+    navigation,
+    moduleActions,
+    modulePage,
+    menuCss,
+  ] = await Promise.all([
+    readFile(new URL("../supabase/migrations/20260809024346_public_online_ordering.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/menu/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/PublicOrderMenu.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/menu/actions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../components/Header.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/HeroStory.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/FirstFoodReveal.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/Footer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../data/navigation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/management/module-actions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/management/[module]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/menu/menu.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(migration, /create or replace function public\.get_public_menu/);
+  assert.match(migration, /create or replace function public\.create_online_order/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /server-side|reprices every item server-side/i);
+  assert.match(migration, /guest_phone_normalized/);
+  assert.match(migration, /source_reference/);
+  assert.match(migration, /order_source = 'WEBSITE'/);
+  assert.match(migration, /p_action = 'SEND_KITCHEN'/);
+  assert.match(migration, /grant execute on function public\.create_online_order[^;]+to anon, authenticated/s);
+  assert.doesNotMatch(migration, /grant (select|insert|update|delete)[^;]+to anon/i);
+
+  assert.match(menuPage, /get_public_menu/);
+  assert.match(menuPage, /randomUUID/);
+  assert.match(publicMenu, /useActionState/);
+  assert.match(publicMenu, /Pickup/);
+  assert.match(publicMenu, /Delivery/);
+  assert.match(publicMenu, /items_json/);
+  assert.match(publicMenu, /Pay at/);
+  assert.match(orderAction, /create_online_order/);
+  assert.doesNotMatch(`${menuPage}${publicMenu}${orderAction}`, /service[_-]?role|sb_secret_/i);
+
+  assert.match(`${header}${hero}${reveal}${footer}${navigation}`, /href="\/menu"|href: "\/menu"/);
+  assert.doesNotMatch(`${hero}${reveal}`, /disabled title="(Ordering|Full menu|Visit)/i);
+  assert.match(moduleActions, /orders\.send_kitchen/);
+  assert.match(modulePage, /Accept &amp; send/);
+  assert.match(modulePage, /Website order/);
+  assert.match(menuCss, /@media \(max-width: 680px\)/);
+  assert.match(menuCss, /mobile-cart-jump/);
+});
+
+test("makes every landing navigation destination real and responsive", async () => {
+  const [page, details, navigation, globalCss] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/LandingDetails.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../data/navigation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /LandingDetails/);
+  assert.match(details, /id="our-story"/);
+  assert.match(details, /id="gallery"/);
+  assert.match(details, /id="visit"/);
+  assert.match(navigation, /href: "#our-story"/);
+  assert.match(navigation, /href: "#gallery"/);
+  assert.match(navigation, /href: "#visit"/);
+  assert.match(globalCss, /@media \(max-width: 430px\)/);
+  assert.match(globalCss, /landing-gallery-grid/);
+  assert.doesNotMatch(navigation, /\{ label: "(Our Story|Gallery|Visit)", phase:/);
+});

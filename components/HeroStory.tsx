@@ -66,12 +66,12 @@ export function HeroStory() {
             </h1>
             <p className="hero-support">Whatever you&apos;re craving, make it worth craving.</p>
             <div className="hero-actions">
-              <a className="primary-cta" href="#first-food">
+              <a className="primary-cta" href="/menu">
                 Explore the menu <span aria-hidden="true">→</span>
               </a>
-              <button type="button" className="secondary-cta" disabled title="Visit details required">
+              <a href="#visit" className="secondary-cta">
                 Visit Adee&apos;s
-              </button>
+              </a>
             </div>
           </div>
 

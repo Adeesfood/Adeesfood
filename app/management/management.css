@@ -141,6 +141,8 @@
 .ops-table td:first-child { min-width: 8.5rem; }
 .ops-table td strong, .ops-table td small { display: block; }
 .ops-table td small { margin-top: 0.2rem; color: var(--ops-muted); font-size: 0.55rem; }
+.ops-table td small.ops-address { max-width: 18rem; color: #5d5148; line-height: 1.45; }
+.ops-source-label { display: inline-flex; margin-top: 0.4rem; padding: 0.24rem 0.45rem; border-radius: 4rem; color: #7b2050; background: #fce8f1; font-size: 0.48rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 .ops-table tr.is-alert-row td { background: #fff8ec; }
 .ops-pill { display: inline-flex; min-height: 1.55rem; align-items: center; padding: 0 0.55rem; border: 1px solid #ddd5cd; border-radius: 10rem; color: #6c635c; background: #f7f3ee; font-size: 0.49rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .ops-pill.is-paid, .ops-pill.is-ready, .ops-pill.is-completed, .ops-pill.is-published, .ops-pill.is-available { color: #226046; border-color: #b9d8c9; background: #eef8f2; }
@@ -149,6 +151,7 @@
 .ops-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .ops-row-actions button, .ops-inline-form button { min-height: 2rem; padding: 0 0.6rem; }
 .ops-row-actions button.is-danger, .catalog-row button.is-danger { color: #8a3838; background: #fff0f0; }
+.ops-row-actions button.is-primary { color: #fff; background: var(--ops-pink); }
 .ops-inline-form { display: flex; align-items: center; gap: 0.35rem; }
 .ops-inline-form input { width: 5rem; min-height: 2rem; padding: 0.4rem; }
 .ops-inline-form select { width: 5.5rem; min-height: 2rem; padding: 0.4rem; }

@@ -53,14 +53,9 @@ export function Header() {
         <Link className="staff-login-link" href="/staff/login">
           Staff login
         </Link>
-        <button
-          className="order-link"
-          type="button"
-          disabled
-          title="Ordering URL required"
-        >
+        <Link className="order-link" href="/menu">
           Order now <span aria-hidden="true">↗</span>
-        </button>
+        </Link>
         <button
           className="menu-toggle"
           type="button"
@@ -111,6 +106,15 @@ export function Header() {
           >
             <span>05</span>
             Staff Login
+          </Link>
+          <Link
+            href="/menu"
+            className="mobile-order-link"
+            onClick={() => setIsOpen(false)}
+            tabIndex={isOpen ? 0 : -1}
+          >
+            <span>06</span>
+            Order Now
           </Link>
         </nav>
         <p>IRRESISTIBLE TASTE.</p>

@@ -1,6 +1,7 @@
 import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { HeroStory } from "../components/HeroStory";
+import { LandingDetails } from "../components/LandingDetails";
 
 export default function Home() {
   const restaurantSchema = {
@@ -19,6 +20,7 @@ export default function Home() {
       <Header />
       <main id="main-content">
         <HeroStory />
+        <LandingDetails />
       </main>
       <Footer />
       <script

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export function FirstFoodReveal() {
   return (
@@ -21,9 +22,9 @@ export function FirstFoodReveal() {
           <br />
           <em>cravings.</em>
         </h2>
-        <button type="button" className="text-cta" disabled title="Full menu arrives in Phase 3">
+        <Link href="/menu" className="text-cta">
           Explore the menu <span aria-hidden="true">→</span>
-        </button>
+        </Link>
       </div>
     </section>
   );

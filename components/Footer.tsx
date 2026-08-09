@@ -22,7 +22,10 @@ export function Footer() {
         <nav className="footer-links" aria-label="Footer navigation">
           <p>Explore</p>
           <a href="#top">Home</a>
-          <a href="#first-food">Menu preview</a>
+          <Link href="/menu">Order online</Link>
+          <a href="#our-story">Our story</a>
+          <a href="#gallery">Gallery</a>
+          <a href="#visit">Visit</a>
           <Link href="/staff/login">Staff login</Link>
         </nav>
 
