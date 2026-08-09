@@ -74,6 +74,8 @@ test("connects staff login to protected Supabase management access", async () =>
   assert.match(management, /getManagementSession/);
   assert.match(managementSession, /getClaims/);
   assert.match(managementSession, /get_my_access_context/);
+  assert.match(managementSession, /from\("locations"\)/);
+  assert.match(managementSession, /if \(!assignment\.location_id\)/);
   assert.match(proxy, /getClaims/);
   assert.match(proxy, /\/management/);
   assert.match(serverClient, /createServerClient/);

@@ -13,8 +13,28 @@ export async function getManagementSession() {
     supabase.from("profiles").select("display_name").eq("id", String(claims.sub)).maybeSingle(),
   ]);
   const access = parseAccessContext(accessData);
-  const assignment = access.assignments[0];
-  if (!assignment?.location_id) redirect("/staff/login?error=no-access");
+  const baseAssignment =
+    access.assignments.find((candidate) => candidate.location_id) ?? access.assignments[0];
+  if (!baseAssignment) redirect("/staff/login?error=no-access");
+
+  let assignment = baseAssignment;
+  if (!assignment.location_id) {
+    const { data: location } = await supabase
+      .from("locations")
+      .select("id, name")
+      .eq("organization_id", assignment.organization_id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!location) redirect("/staff/login?error=no-access");
+    assignment = {
+      ...assignment,
+      location_id: location.id,
+      location_name: location.name,
+    };
+  }
 
   const email = typeof claims.email === "string" ? claims.email : "Authorized staff";
   const displayName =
