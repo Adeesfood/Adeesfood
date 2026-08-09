@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { navigationItems } from "../data/navigation";
 
@@ -49,6 +50,9 @@ export function Header() {
       </nav>
 
       <div className="header-actions">
+        <Link className="staff-login-link" href="/staff/login">
+          Staff login
+        </Link>
         <button
           className="order-link"
           type="button"
@@ -100,6 +104,14 @@ export function Header() {
               </button>
             ),
           )}
+          <Link
+            href="/staff/login"
+            onClick={() => setIsOpen(false)}
+            tabIndex={isOpen ? 0 : -1}
+          >
+            <span>05</span>
+            Staff Login
+          </Link>
         </nav>
         <p>IRRESISTIBLE TASTE.</p>
       </div>

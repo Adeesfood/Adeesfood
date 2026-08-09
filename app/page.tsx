@@ -1,3 +1,4 @@
+import { Footer } from "../components/Footer";
 import { Header } from "../components/Header";
 import { HeroStory } from "../components/HeroStory";
 
@@ -19,6 +20,7 @@ export default function Home() {
       <main id="main-content">
         <HeroStory />
       </main>
+      <Footer />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(restaurantSchema) }}
