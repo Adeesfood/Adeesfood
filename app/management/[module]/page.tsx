@@ -18,6 +18,7 @@ import {
   createInventoryItem,
   createMenuCategory,
   createMenuItem,
+  createMenuVariant,
   createPurchaseOrder,
   createRecipe,
   createReservation,
@@ -49,6 +50,17 @@ type RecipeIngredient = {
 };
 type PurchaseLine = { item_name: string; quantity: number | string; unit: string };
 type CustomerOrder = { total_minor: number | string; created_at: string };
+type NamedRelation = { name: string } | Array<{ name: string }> | null;
+type MenuCategoryLink = { menu_categories: NamedRelation };
+type MenuVariantRow = {
+  id: string;
+  name: string | null;
+  price_minor: number;
+  currency_code: string;
+  is_active: boolean;
+  sort_order: number;
+};
+type MenuModifierLink = { modifier_groups: NamedRelation };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { module: slug } = await params;
@@ -101,16 +113,34 @@ export default async function ModulePage({ params, searchParams }: PageProps) {
 async function OrdersModule(session: Session) {
   const { supabase, assignment, access } = session;
   const [menuResult, customersResult, tablesResult, ordersResult] = await Promise.all([
-    supabase.from("menu_items").select("id, name, description, price_minor, station, is_available, menu_categories(name)")
+    supabase.from("menu_items").select("id, name, description, price_minor, station, is_available, is_price_from, menu_categories(name), menu_item_categories(menu_categories(name)), menu_item_variants(id, name, price_minor, is_default, is_available, is_active, sort_order), menu_item_modifier_groups(sort_order, modifier_groups(id, name, selection_type, min_selections, max_selections, is_required, modifier_options(id, name, price_delta_minor, is_available, is_active, sort_order)))")
       .eq("location_id", assignment.location_id).eq("is_active", true).order("name"),
     supabase.from("customers").select("id, display_name, phone").eq("location_id", assignment.location_id).eq("is_active", true).order("display_name").limit(100),
     supabase.from("restaurant_tables").select("id, code, capacity, status").eq("location_id", assignment.location_id).eq("is_active", true).in("status", ["AVAILABLE", "OCCUPIED"]).order("code"),
-    supabase.from("orders").select("id, order_number, channel, order_status, kitchen_status, payment_status, fulfillment_status, total_minor, amount_paid_minor, currency_code, notes, created_at, customers(display_name), restaurant_tables(code), order_items(item_name, quantity)")
+    supabase.from("orders").select("id, order_number, channel, order_status, kitchen_status, payment_status, fulfillment_status, total_minor, amount_paid_minor, currency_code, notes, created_at, customers(display_name), restaurant_tables(code), order_items(item_name, variant_name, quantity, order_item_modifiers(option_name))")
       .eq("location_id", assignment.location_id).order("created_at", { ascending: false }).limit(50),
   ]);
   const menuItems = (menuResult.data ?? []).map((item) => ({
     ...item,
-    menu_categories: Array.isArray(item.menu_categories) ? item.menu_categories[0] ?? null : item.menu_categories,
+    categories: Array.from(new Set([
+      ...(item.menu_item_categories ?? []).flatMap((link) => {
+        const relation = Array.isArray(link.menu_categories) ? link.menu_categories[0] : link.menu_categories;
+        return relation?.name ? [relation.name] : [];
+      }),
+      ...(() => {
+        const primary = Array.isArray(item.menu_categories) ? item.menu_categories[0] : item.menu_categories;
+        return primary?.name ? [primary.name] : [];
+      })(),
+    ])),
+    variants: (item.menu_item_variants ?? []).sort((a, b) => a.sort_order - b.sort_order),
+    modifier_groups: (item.menu_item_modifier_groups ?? []).flatMap((link) => {
+      const group = Array.isArray(link.modifier_groups) ? link.modifier_groups[0] : link.modifier_groups;
+      if (!group) return [];
+      return [{
+        ...group,
+        options: (group.modifier_options ?? []).sort((a, b) => a.sort_order - b.sort_order),
+      }];
+    }),
   }));
   const customers = (customersResult.data ?? []).map((customer) => ({ id: customer.id, label: `${customer.display_name}${customer.phone ? ` · ${customer.phone}` : ""}` }));
   const tables = (tablesResult.data ?? []).map((table) => ({ id: table.id, label: `${table.code} · ${table.capacity} seats · ${table.status}` }));
@@ -130,7 +160,7 @@ async function OrdersModule(session: Session) {
           const customer = Array.isArray(order.customers) ? order.customers[0] : order.customers;
           const table = Array.isArray(order.restaurant_tables) ? order.restaurant_tables[0] : order.restaurant_tables;
           const balance = Number(order.total_minor) - Number(order.amount_paid_minor);
-          return <tr key={order.id}><td><strong>{order.order_number}</strong><small>{formatDateTime(order.created_at)}</small></td><td>{customer?.display_name ?? "Walk-in guest"}<small>{order.channel.replaceAll("_", " ")}{table?.code ? ` · Table ${table.code}` : ""}</small></td><td>{(order.order_items ?? []).map((item) => `${item.quantity}× ${item.item_name}`).join(", ")}</td><td><span className={`ops-pill is-${order.kitchen_status.toLowerCase()}`}>{order.kitchen_status.replaceAll("_", " ")}</span></td><td><span className={`ops-pill is-${order.payment_status.toLowerCase()}`}>{order.payment_status.replaceAll("_", " ")}</span></td><td><strong>{formatMoney(order.total_minor, order.currency_code)}</strong><small>{balance > 0 ? `${formatMoney(balance)} due` : "Settled"}</small></td><td><div className="ops-row-actions">
+          return <tr key={order.id}><td><strong>{order.order_number}</strong><small>{formatDateTime(order.created_at)}</small></td><td>{customer?.display_name ?? "Walk-in guest"}<small>{order.channel.replaceAll("_", " ")}{table?.code ? ` · Table ${table.code}` : ""}</small></td><td>{(order.order_items ?? []).map((item) => { const modifiers = (item.order_item_modifiers ?? []).map((modifier) => modifier.option_name).join(" + "); return `${item.quantity}× ${item.item_name}${item.variant_name ? ` (${item.variant_name})` : ""}${modifiers ? ` · ${modifiers}` : ""}`; }).join(", ")}</td><td><span className={`ops-pill is-${order.kitchen_status.toLowerCase()}`}>{order.kitchen_status.replaceAll("_", " ")}</span></td><td><span className={`ops-pill is-${order.payment_status.toLowerCase()}`}>{order.payment_status.replaceAll("_", " ")}</span></td><td><strong>{formatMoney(order.total_minor, order.currency_code)}</strong><small>{balance > 0 ? `${formatMoney(balance)} due` : "Settled"}</small></td><td><div className="ops-row-actions">
             {balance > 0 && hasPermission(access.permissions, "payments.record") ? <form action={recordOrderPayment} className="ops-inline-form"><input type="hidden" name="order_id" value={order.id} /><input name="amount" type="number" min="0.01" step="0.01" defaultValue={(balance / 100).toFixed(2)} aria-label="Payment amount" /><select name="payment_method" aria-label="Payment method"><option>CASH</option><option>MOMO</option><option>CARD</option><option>ONLINE</option></select><button type="submit">Pay</button></form> : null}
             {order.payment_status === "PAID" && order.order_status !== "COMPLETED" ? <form action={advanceOrder}><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="action" value="COMPLETE" /><button type="submit">Complete</button></form> : null}
             {!['COMPLETED','CANCELLED','VOIDED','REFUNDED'].includes(order.order_status) && hasPermission(access.permissions, "orders.cancel_unstarted") ? <form action={advanceOrder}><input type="hidden" name="order_id" value={order.id} /><input type="hidden" name="action" value="CANCEL" /><input type="hidden" name="reason" value="Cancelled by authorized staff" /><button className="is-danger" type="submit">Cancel</button></form> : null}
@@ -144,7 +174,7 @@ async function OrdersModule(session: Session) {
 async function KitchenModule(session: Session) {
   const { supabase, assignment, access } = session;
   const { data: tickets } = await supabase.from("kitchen_tickets")
-    .select("id, ticket_number, station, priority, status, queued_at, started_at, ready_at, target_seconds, orders(order_number, channel, notes, restaurant_tables(code), order_items(item_name, quantity, notes))")
+    .select("id, ticket_number, station, priority, status, queued_at, started_at, ready_at, target_seconds, orders(order_number, channel, notes, restaurant_tables(code), order_items(item_name, variant_name, quantity, notes, order_item_modifiers(option_name)))")
     .eq("location_id", assignment.location_id).in("status", ["QUEUED", "PREPARING", "READY"]).order("queued_at");
   return <>
     <LiveRefresh tables={["kitchen_tickets", "orders"]} />
@@ -154,7 +184,7 @@ async function KitchenModule(session: Session) {
       const table = Array.isArray(order?.restaurant_tables) ? order.restaurant_tables[0] : order?.restaurant_tables;
       const nextStatus = ticket.status === "QUEUED" ? "PREPARING" : ticket.status === "PREPARING" ? "READY" : "SERVED";
       const allowed = ticket.status === "QUEUED" ? hasPermission(access.permissions, "kitchen.start_ticket") : hasPermission(access.permissions, "kitchen.ready_ticket");
-      return <article className="kds-ticket" key={ticket.id}><header><div><span>{ticket.station}</span><h2>{ticket.ticket_number}</h2></div><KdsElapsed queuedAt={ticket.queued_at} targetSeconds={ticket.target_seconds} /></header><div className="kds-meta"><span>{order?.channel?.replaceAll("_", " ")}</span><span>{table?.code ? `Table ${table.code}` : "Pickup"}</span><span>{ticket.priority}</span></div><ul>{(order?.order_items ?? []).filter((item) => item).map((item, index) => <li key={`${item.item_name}-${index}`}><b>{item.quantity}×</b><span>{item.item_name}{item.notes ? <small>{item.notes}</small> : null}</span></li>)}</ul>{order?.notes ? <p className="kds-note">Note: {order.notes}</p> : null}<footer><span className={`ops-pill is-${ticket.status.toLowerCase()}`}>{ticket.status}</span>{allowed ? <form action={advanceKitchenTicket}><input type="hidden" name="ticket_id" value={ticket.id} /><input type="hidden" name="next_status" value={nextStatus} /><button type="submit">{nextStatus === "PREPARING" ? "Start" : nextStatus === "READY" ? "Ready" : "Served"}</button></form> : null}</footer></article>;
+      return <article className="kds-ticket" key={ticket.id}><header><div><span>{ticket.station}</span><h2>{ticket.ticket_number}</h2></div><KdsElapsed queuedAt={ticket.queued_at} targetSeconds={ticket.target_seconds} /></header><div className="kds-meta"><span>{order?.channel?.replaceAll("_", " ")}</span><span>{table?.code ? `Table ${table.code}` : "Pickup"}</span><span>{ticket.priority}</span></div><ul>{(order?.order_items ?? []).filter((item) => item).map((item, index) => { const modifiers = (item.order_item_modifiers ?? []).map((modifier) => modifier.option_name).join(" · "); return <li key={`${item.item_name}-${index}`}><b>{item.quantity}×</b><span>{item.item_name}{item.variant_name ? ` · ${item.variant_name}` : ""}{modifiers ? <small>{modifiers}</small> : null}{item.notes ? <small>{item.notes}</small> : null}</span></li>; })}</ul>{order?.notes ? <p className="kds-note">Note: {order.notes}</p> : null}<footer><span className={`ops-pill is-${ticket.status.toLowerCase()}`}>{ticket.status}</span>{allowed ? <form action={advanceKitchenTicket}><input type="hidden" name="ticket_id" value={ticket.id} /><input type="hidden" name="next_status" value={nextStatus} /><button type="submit">{nextStatus === "PREPARING" ? "Start" : nextStatus === "READY" ? "Ready" : "Served"}</button></form> : null}</footer></article>;
     })}{tickets?.length ? null : <Empty title="No active kitchen tickets" body="New orders sent from the POS will appear here automatically." />}</div>
   </>;
 }
@@ -174,13 +204,13 @@ async function MenuModule(session: Session) {
   const { supabase, assignment, access } = session;
   const [{ data: categories }, { data: items }] = await Promise.all([
     supabase.from("menu_categories").select("*").eq("location_id", assignment.location_id).order("sort_order").order("name"),
-    supabase.from("menu_items").select("*, menu_categories(name)").eq("location_id", assignment.location_id).order("name"),
+    supabase.from("menu_items").select("*, menu_categories(name), menu_item_categories(menu_categories(name)), menu_item_variants(id, name, price_minor, currency_code, is_default, is_available, is_active, sort_order), menu_item_modifier_groups(modifier_groups(name))").eq("location_id", assignment.location_id).order("name"),
   ]);
   return <>
     <LiveRefresh tables={["menu_items"]} />
     <PageHead eyebrow="Single source of truth" title="Menu" description="The same live catalog powers POS availability, kitchen routing, recipes, and future website ordering." />
-    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Catalog</p><h2>Menu items</h2></div><span>{items?.filter((item) => item.is_available).length ?? 0} available</span></div><div className="ops-card-list">{(items ?? []).map((item) => <article className="catalog-row" key={item.id}><div><span>{item.menu_categories?.name ?? "Uncategorized"} · {item.station}</span><h3>{item.name}</h3><p>{item.description || item.sku}</p></div><strong>{formatMoney(item.price_minor, item.currency_code)}</strong><form action={toggleMenuAvailability}><input type="hidden" name="menu_item_id" value={item.id} /><input type="hidden" name="available" value={String(!item.is_available)} /><button className={item.is_available ? "is-danger" : ""} type="submit">{item.is_available ? "Mark sold out" : "Make available"}</button></form></article>)}{items?.length ? null : <Empty title="Your menu is ready to be built" body="Create a category, then add the first priced menu item without inventing duplicate variants." />}</div></section>
-      {hasPermission(access.permissions, "menu.manage_catalog") ? <div className="ops-form-stack"><section className="ops-form-card"><p className="ops-kicker">Structure</p><h2>New category</h2><form action={createMenuCategory} className="ops-form"><label>Name<input name="name" required placeholder="Rice & meals" /></label><label>Description<textarea name="description" rows={2} /></label><label>Sort order<input name="sort_order" type="number" defaultValue="0" /></label><FormSubmitButton>Add category</FormSubmitButton></form></section><section className="ops-form-card"><p className="ops-kicker">Sellable item</p><h2>New menu item</h2><form action={createMenuItem} className="ops-form"><label>Category<select name="category_id" required defaultValue=""><option value="" disabled>Choose category</option>{(categories ?? []).map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label><label>Item name<input name="name" required /></label><div className="ops-form-row"><label>SKU<input name="sku" required /></label><label>Price (GHS)<input name="price" type="number" min="0" step="0.01" required /></label></div><label>Kitchen station<select name="station"><option>MAIN KITCHEN</option><option>GRILL</option><option>PIZZA</option><option>DRINKS</option><option>PASTRY</option></select></label><label>Description<textarea name="description" rows={2} /></label><FormSubmitButton>Add menu item</FormSubmitButton></form></section></div> : null}</div>
+    <div className="ops-split-layout is-wide-main"><section className="ops-panel"><div className="ops-panel-head"><div><p className="ops-kicker">Catalog</p><h2>Menu items</h2></div><span>{items?.filter((item) => item.is_available).length ?? 0} available</span></div><div className="ops-card-list">{(items ?? []).map((item) => { const categoryNames = Array.from(new Set((item.menu_item_categories ?? []).flatMap((link: MenuCategoryLink) => { const relation = Array.isArray(link.menu_categories) ? link.menu_categories[0] : link.menu_categories; return relation?.name ? [relation.name] : []; }))); const variants = (item.menu_item_variants ?? []).filter((variant: MenuVariantRow) => variant.is_active).sort((a: MenuVariantRow, b: MenuVariantRow) => a.sort_order - b.sort_order); const modifierNames = (item.menu_item_modifier_groups ?? []).flatMap((link: MenuModifierLink) => { const relation = Array.isArray(link.modifier_groups) ? link.modifier_groups[0] : link.modifier_groups; return relation?.name ? [relation.name] : []; }); return <article className="catalog-row" key={item.id}><div><span>{categoryNames.join(" + ") || item.menu_categories?.name || "Uncategorized"} · {item.station}</span><h3>{item.name}</h3><p>{item.description || item.sku}</p>{variants.length ? <div className="catalog-variants">{variants.map((variant: MenuVariantRow) => <em key={variant.id}>{variant.name ?? "Unlabeled option"} · {formatMoney(variant.price_minor, variant.currency_code)}</em>)}</div> : null}{modifierNames.length ? <small className="catalog-modifiers">Choices: {modifierNames.join(" · ")}</small> : null}{item.source_notes ? <small className="catalog-source-note">Review: {item.source_notes}</small> : null}</div><strong>{item.is_price_from || variants.length ? "From " : ""}{formatMoney(item.price_minor, item.currency_code)}</strong><form action={toggleMenuAvailability}><input type="hidden" name="menu_item_id" value={item.id} /><input type="hidden" name="available" value={String(!item.is_available)} /><button className={item.is_available ? "is-danger" : ""} type="submit">{item.is_available ? "Mark sold out" : "Make available"}</button></form></article>; })}{items?.length ? null : <Empty title="Your menu is ready to be built" body="Create a category, then add the first priced menu item without inventing duplicate variants." />}</div></section>
+      {hasPermission(access.permissions, "menu.manage_catalog") ? <div className="ops-form-stack"><section className="ops-form-card"><p className="ops-kicker">Structure</p><h2>New category</h2><form action={createMenuCategory} className="ops-form"><label>Name<input name="name" required placeholder="Rice & meals" /></label><label>Description<textarea name="description" rows={2} /></label><label>Sort order<input name="sort_order" type="number" defaultValue="0" /></label><FormSubmitButton>Add category</FormSubmitButton></form></section><section className="ops-form-card"><p className="ops-kicker">Sellable item</p><h2>New menu item</h2><form action={createMenuItem} className="ops-form"><label>Category<select name="category_id" required defaultValue=""><option value="" disabled>Choose category</option>{(categories ?? []).map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label><label>Item name<input name="name" required /></label><div className="ops-form-row"><label>SKU<input name="sku" required /></label><label>Price (GHS)<input name="price" type="number" min="0" step="0.01" required /></label></div><label>Kitchen station<select name="station"><option>MAIN KITCHEN</option><option>GRILL</option><option>PIZZA</option><option>DRINKS</option><option>PASTRY</option></select></label><label>Description<textarea name="description" rows={2} /></label><FormSubmitButton>Add menu item</FormSubmitButton></form></section><section className="ops-form-card"><p className="ops-kicker">Portions & sizes</p><h2>Add priced variant</h2><form action={createMenuVariant} className="ops-form"><label>Menu item<select name="menu_item_id" required defaultValue=""><option value="" disabled>Choose item</option>{(items ?? []).filter((item) => item.is_active).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Variant name<input name="name" required placeholder="Large" /></label><div className="ops-form-row"><label>Price (GHS)<input name="price" type="number" min="0" step="0.01" required /></label><label>Sort order<input name="sort_order" type="number" min="0" step="10" /></label></div><FormSubmitButton>Add variant</FormSubmitButton></form></section></div> : null}</div>
   </>;
 }
 

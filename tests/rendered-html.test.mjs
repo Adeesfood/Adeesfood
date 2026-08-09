@@ -86,3 +86,28 @@ test("connects staff login to protected Supabase management access", async () =>
     /service[_-]?role|sb_secret_/i,
   );
 });
+
+test("seeds the production menu as structured Supabase catalog data", async () => {
+  const [migration, composer, moduleActions, modulePage] = await Promise.all([
+    readFile(new URL("../supabase/migrations/20260809023102_menu_catalog_seed.sql", import.meta.url), "utf8"),
+    readFile(new URL("../components/management/OrderComposer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/management/module-actions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/management/[module]/page.tsx", import.meta.url), "utf8"),
+  ]);
+  const itemSeed = migration.split("with seed(sku, category_name")[1].split(")\n  insert into public.menu_items")[0];
+  const variantSeed = migration.split("with seed(item_sku, code, name, price_minor")[1].split(")\n  insert into public.menu_item_variants")[0];
+
+  assert.equal((itemSeed.match(/^      \('/gm) ?? []).length, 108);
+  assert.equal((variantSeed.match(/^      \('/gm) ?? []).length, 38);
+  assert.match(migration, /create table public\.modifier_groups/);
+  assert.match(migration, /create table public\.order_item_modifiers/);
+  assert.match(migration, /source_notes/);
+  assert.match(migration, /BRG-LOADED-FRIES/);
+  assert.doesNotMatch(itemSeed, /PZA-TOPPING/);
+  assert.doesNotMatch(`${migration}${composer}${moduleActions}${modulePage}`, /zolara/i);
+  assert.match(composer, /menu_item_variant_id/);
+  assert.match(composer, /modifier_option_ids/);
+  assert.match(moduleActions, /createMenuVariant/);
+  assert.match(moduleActions, /menu_item_categories/);
+  assert.match(modulePage, /order_item_modifiers\(option_name\)/);
+});

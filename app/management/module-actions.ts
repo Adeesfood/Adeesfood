@@ -68,16 +68,52 @@ export async function createMenuCategory(formData: FormData) {
 export async function createMenuItem(formData: FormData) {
   await perform("menu", "Menu item added and ready for ordering.", async () => {
     const { supabase, assignment } = await context("menu.manage_catalog");
-    const { error } = await supabase.from("menu_items").insert({
+    const categoryId = value(formData, "category_id");
+    const { data: item, error } = await supabase.from("menu_items").insert({
       organization_id: assignment.organization_id,
       location_id: assignment.location_id,
-      category_id: value(formData, "category_id"),
+      category_id: categoryId,
       sku: value(formData, "sku").toUpperCase(),
       name: value(formData, "name"),
       description: optionalValue(formData, "description"),
       price_minor: moneyValue(formData, "price"),
       station: value(formData, "station") || "MAIN KITCHEN",
       is_available: true,
+    }).select("id").single();
+    if (error) throw error;
+    const { error: categoryError } = await supabase.from("menu_item_categories").insert({
+      organization_id: assignment.organization_id,
+      location_id: assignment.location_id,
+      menu_item_id: item.id,
+      category_id: categoryId,
+      is_primary: true,
+    });
+    if (categoryError) throw categoryError;
+  });
+}
+
+export async function createMenuVariant(formData: FormData) {
+  await perform("menu", "Menu variant added.", async () => {
+    const { supabase, assignment } = await context("menu.manage_catalog");
+    const name = value(formData, "name");
+    const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32);
+    if (!code) throw new Error("Enter a valid variant name.");
+    const menuItemId = value(formData, "menu_item_id");
+    const { count, error: countError } = await supabase.from("menu_item_variants")
+      .select("id", { count: "exact", head: true }).eq("menu_item_id", menuItemId).eq("is_active", true);
+    if (countError) throw countError;
+    const { error } = await supabase.from("menu_item_variants").insert({
+      organization_id: assignment.organization_id,
+      location_id: assignment.location_id,
+      menu_item_id: menuItemId,
+      code,
+      name,
+      price_minor: moneyValue(formData, "price"),
+      currency_code: "GHS",
+      sort_order: numberValue(formData, "sort_order", (count ?? 0) * 10 + 10),
+      is_default: (count ?? 0) === 0,
+      is_available: true,
+      is_active: true,
     });
     if (error) throw error;
   });

@@ -168,10 +168,25 @@
 .pos-item > span { color: var(--ops-pink); font-size: 0.48rem; font-weight: 800; letter-spacing: 0.09em; }
 .pos-item strong { margin-top: 1rem; font-family: var(--font-display), serif; font-size: 1.05rem; }
 .pos-item small { margin-top: 0.3rem; color: var(--ops-muted); font-size: 0.56rem; line-height: 1.45; }
-.pos-item b { margin-top: auto; padding-top: 0.7rem; font-size: 0.68rem; }
+.pos-base-price { margin-top: auto; padding-top: 0.7rem; font-size: 0.68rem; }
 .pos-item i { position: absolute; right: 0.65rem; bottom: 0.65rem; color: var(--ops-pink); font-style: normal; }
 .pos-item em { position: absolute; inset: auto 0.5rem 0.5rem auto; padding: 0.3rem 0.5rem; border-radius: 4rem; color: #8a3838; background: #fff0f0; font-size: 0.5rem; font-style: normal; }
-.pos-item:disabled { opacity: 0.56; }
+.pos-item.is-disabled { opacity: 0.56; }
+.pos-variant-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem; margin-top: 0.65rem; }
+.pos-variant-options button { display: grid; gap: 0.1rem; min-width: 0; padding: 0.45rem; border: 1px solid var(--ops-line); border-radius: 0.35rem; color: var(--ops-muted); background: #fff; font-size: 0.52rem; text-align: left; }
+.pos-variant-options button b { color: var(--ops-ink); font-size: 0.55rem; }
+.pos-variant-options button.is-active { color: #fff; border-color: var(--ops-ink); background: var(--ops-ink); }
+.pos-variant-options button.is-active b { color: #fff; }
+.pos-modifiers { margin-top: 0.6rem; border-top: 1px solid var(--ops-line); border-bottom: 1px solid var(--ops-line); }
+.pos-modifiers summary { padding: 0.55rem 0; color: var(--ops-pink); font-size: 0.52rem; font-weight: 800; cursor: pointer; }
+.pos-modifiers fieldset { display: grid; gap: 0.35rem; margin: 0; padding: 0.5rem 0; border: 0; border-top: 1px solid #eee8e1; }
+.pos-modifiers legend { padding: 0; color: var(--ops-ink); font-size: 0.52rem; font-weight: 800; }
+.pos-modifiers select { width: 100%; min-height: 2.1rem; padding: 0.4rem; border: 1px solid #dcd4cb; border-radius: 0.35rem; background: #fff; font-size: 0.55rem; }
+.pos-modifier-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem; }
+.pos-modifier-checks label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.3rem; padding: 0.3rem; border-radius: 0.25rem; background: #fff; color: var(--ops-muted); font-size: 0.49rem; }
+.pos-modifier-checks label b { grid-column: 2; color: var(--ops-pink); font-size: 0.46rem; }
+.pos-add-item { min-height: 2.35rem; margin-top: 0.65rem; border: 0; border-radius: 0.38rem; color: #fff; background: var(--ops-ink); font-size: 0.58rem; font-weight: 800; }
+.pos-add-item:disabled { background: #8c8279; }
 .pos-cart { position: sticky; top: 5.7rem; display: flex; max-height: calc(100vh - 7rem); flex-direction: column; padding: 1rem; }
 .pos-cart-head { display: flex; justify-content: space-between; align-items: flex-start; }
 .pos-cart-head > span { color: var(--ops-muted); font-size: 0.6rem; }
@@ -202,6 +217,10 @@
 
 .ops-card-list, .recipe-list, .reservation-list, .setting-list { display: grid; gap: 0.55rem; }
 .catalog-row, .purchase-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 1rem; padding: 0.85rem; border: 1px solid var(--ops-line); border-radius: 0.5rem; background: #fff; }.catalog-row > div, .purchase-row > div { display: grid; gap: 0.18rem; }.catalog-row span, .purchase-row > div > span { color: var(--ops-pink); font-size: 0.5rem; font-weight: 800; }.catalog-row h3, .purchase-row h3 { margin: 0; font-family: var(--font-display), serif; font-size: 1.12rem; }.catalog-row p, .purchase-row p { margin: 0; color: var(--ops-muted); font-size: 0.57rem; }.catalog-row button, .purchase-row button { min-height: 2.1rem; }
+.catalog-variants { display: flex !important; flex-wrap: wrap; gap: 0.25rem !important; margin-top: 0.35rem; }
+.catalog-variants em { padding: 0.25rem 0.4rem; border-radius: 5rem; color: #625950; background: #f4efe9; font-size: 0.48rem; font-style: normal; }
+.catalog-modifiers, .catalog-source-note { display: block; margin-top: 0.25rem; color: var(--ops-muted); font-size: 0.5rem; line-height: 1.45; }
+.catalog-source-note { color: #7e5b20; }
 .purchase-row { grid-template-columns: minmax(0, 1fr) auto auto auto; }
 .recipe-list > article { padding: 1rem; border: 1px solid var(--ops-line); border-radius: 0.55rem; background: #fff; }.recipe-list header, .recipe-list footer { display: flex; justify-content: space-between; gap: 1rem; }.recipe-list header span { color: var(--ops-pink); font-size: 0.5rem; }.recipe-list h3 { margin: 0.2rem 0 0; font-family: var(--font-display), serif; font-size: 1.2rem; }.recipe-list header p { margin: 0.15rem 0; color: var(--ops-muted); font-size: 0.58rem; }.recipe-list ul { margin: 0.8rem 0; padding: 0; list-style: none; }.recipe-list li { display: flex; justify-content: space-between; padding: 0.45rem 0; border-top: 1px solid #eee8e1; font-size: 0.65rem; }.recipe-list footer { align-items: flex-end; }.recipe-list footer > div { display: grid; gap: 0.15rem; }.recipe-list footer span { color: var(--ops-muted); font-size: 0.5rem; }.recipe-list footer strong { font-size: 0.76rem; }.recipe-list footer button { min-height: 2.2rem; padding: 0 0.7rem; border: 0; border-radius: 0.4rem; color: #fff; background: var(--ops-ink); font-size: 0.58rem; }
 .supplier-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }.supplier-grid article { padding: 1rem; border: 1px solid var(--ops-line); border-radius: 0.55rem; }.supplier-grid > article > span { color: var(--ops-pink); font-size: 0.52rem; font-weight: 800; }.supplier-grid h3 { margin: 0.5rem 0 0.15rem; font-family: var(--font-display), serif; font-size: 1.2rem; }.supplier-grid p { margin: 0 0 0.8rem; color: var(--ops-muted); font-size: 0.6rem; }.supplier-grid dl { margin: 0; }.supplier-grid dl div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-top: 1px solid #eee8e1; font-size: 0.56rem; }.supplier-grid dt { color: var(--ops-muted); }
