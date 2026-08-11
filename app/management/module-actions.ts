@@ -540,6 +540,19 @@ export async function inviteStaffMember(formData: FormData) {
   });
 }
 
+export async function archiveStaffMember(formData: FormData) {
+  await perform("staff", "Staff member archived.", async () => {
+    const { supabase, assignment } = await context("security.manage_users_roles");
+    const { error } = await supabase.rpc("archive_staff_member", {
+      p_organization_id: assignment.organization_id,
+      p_location_id: assignment.location_id,
+      p_profile_id: value(formData, "profile_id"),
+      p_reason: optionalValue(formData, "reason"),
+    });
+    if (error) throw error;
+  });
+}
+
 export async function updateRestaurantProfile(formData: FormData) {
   await perform("settings", "Restaurant profile updated.", async () => {
     const { supabase, assignment } = await context("settings.manage_location");
