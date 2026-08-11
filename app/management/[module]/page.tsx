@@ -555,12 +555,13 @@ async function StaffModule(session: Session) {
                   <span className="staff-card-name"><h3>{profile?.display_name}</h3><strong>{employment.is_active ? (role?.name ?? "No active role") : "Archived"}</strong></span>
                 </summary>
                 <div className="staff-card-body">
-                  <p>{profile?.email || "No email on file"}</p>
+                  {employment.is_active && canManage ? null : <p>{profile?.email || "No email on file"}</p>}
                   <p>{employment.employee_number} · Started {employment.start_date}{employment.is_active ? "" : ` · Archived ${employment.end_date}`}</p>
                   {employment.is_active && canManage ? (
                     <form action={updateStaffMember} className="ops-form">
                       <input type="hidden" name="profile_id" value={employment.profile_id} />
                       <label>Full name<input name="display_name" defaultValue={profile?.display_name ?? ""} required /></label>
+                      <label>Email<input name="email" type="email" defaultValue={profile?.email ?? ""} required /></label>
                       <div className="ops-form-row">
                         <label>Phone<input name="phone" defaultValue={profile?.phone ?? ""} /></label>
                         <label>Employee number<input name="employee_number" defaultValue={employment.employee_number} required /></label>
