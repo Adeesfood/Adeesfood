@@ -40,7 +40,19 @@ export async function getManagementSession() {
   const displayName =
     (typeof profile?.display_name === "string" ? profile.display_name : null) ?? email.split("@")[0];
 
-  return { supabase, claims, access, assignment, email, displayName };
+  const { data: dineInSetting } = await supabase
+    .from("operational_settings")
+    .select("setting_value")
+    .eq("location_id", assignment.location_id)
+    .eq("setting_key", "operations.dine_in_enabled")
+    .maybeSingle();
+  // Adee's Food operates pickup + delivery only, so the absence of this
+  // setting means dine-in stays hidden rather than defaulting to shown.
+  // Setting values are always saved as strings through the generic
+  // operational-settings form, matching every other setting key.
+  const dineInEnabled = dineInSetting?.setting_value?.value === "true";
+
+  return { supabase, claims, access, assignment, email, displayName, dineInEnabled };
 }
 
 export function hasPermission(permissions: string[], permission: string) {

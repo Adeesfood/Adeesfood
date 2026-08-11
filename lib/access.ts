@@ -47,14 +47,17 @@ export function parseAccessContext(value: unknown): AccessContext {
   };
 }
 
+export const navGroups = ["Overview", "Operations", "Catalog & stock", "Supply chain", "People", "Insights", "System"] as const;
+
 export const managementModules = [
   {
     name: "Dashboard",
-    shortName: "Home",
+    shortName: "Dashboard",
     slug: "",
-    description: "Live service, sales, tables, and stock signals.",
+    description: "Live pickup, delivery, sales, and stock signals.",
     permissionPrefixes: ["dashboard."],
-    marker: "01",
+    group: "Overview",
+    icon: "dashboard",
   },
   {
     name: "Orders",
@@ -62,15 +65,17 @@ export const managementModules = [
     slug: "orders",
     description: "Create, settle, and track every guest order.",
     permissionPrefixes: ["orders."],
-    marker: "02",
+    group: "Operations",
+    icon: "orders",
   },
   {
-    name: "Kitchen",
-    shortName: "Kitchen",
-    slug: "kitchen",
-    description: "Run live preparation tickets and handoff.",
-    permissionPrefixes: ["kitchen."],
-    marker: "03",
+    name: "Deliveries",
+    shortName: "Deliveries",
+    slug: "deliveries",
+    description: "Assign riders, track dispatch, and settle cash on delivery.",
+    permissionPrefixes: ["deliveries."],
+    group: "Operations",
+    icon: "deliveries",
   },
   {
     name: "Tables",
@@ -78,55 +83,9 @@ export const managementModules = [
     slug: "tables",
     description: "See covers, occupancy, and table readiness.",
     permissionPrefixes: ["tables."],
-    marker: "04",
-  },
-  {
-    name: "Menu",
-    shortName: "Menu",
-    slug: "menu",
-    description: "Control the menu catalog, prices, and availability.",
-    permissionPrefixes: ["menu."],
-    marker: "05",
-  },
-  {
-    name: "Inventory",
-    shortName: "Inventory",
-    slug: "inventory",
-    description: "Monitor stock, costs, alerts, and movements.",
-    permissionPrefixes: ["inventory."],
-    marker: "06",
-  },
-  {
-    name: "Recipes",
-    shortName: "Recipes",
-    slug: "recipes",
-    description: "Map dishes to ingredients and live recipe cost.",
-    permissionPrefixes: ["recipes."],
-    marker: "07",
-  },
-  {
-    name: "Purchasing",
-    shortName: "Purchasing",
-    slug: "purchasing",
-    description: "Issue purchase orders and receive goods into stock.",
-    permissionPrefixes: ["purchase_", "goods_receipts.", "supplier_invoices."],
-    marker: "08",
-  },
-  {
-    name: "Suppliers",
-    shortName: "Suppliers",
-    slug: "suppliers",
-    description: "Manage supplier contacts and commercial details.",
-    permissionPrefixes: ["suppliers."],
-    marker: "09",
-  },
-  {
-    name: "Customers",
-    shortName: "Customers",
-    slug: "customers",
-    description: "Keep useful guest profiles and order history.",
-    permissionPrefixes: ["customers."],
-    marker: "10",
+    group: "Operations",
+    icon: "tables",
+    dineInOnly: true,
   },
   {
     name: "Reservations",
@@ -134,7 +93,63 @@ export const managementModules = [
     slug: "reservations",
     description: "Manage bookings, arrivals, seating, and no-shows.",
     permissionPrefixes: ["reservations."],
-    marker: "11",
+    group: "Operations",
+    icon: "reservations",
+    dineInOnly: true,
+  },
+  {
+    name: "Menu",
+    shortName: "Menu",
+    slug: "menu",
+    description: "Control the menu catalog, prices, and availability.",
+    permissionPrefixes: ["menu."],
+    group: "Catalog & stock",
+    icon: "menu",
+  },
+  {
+    name: "Inventory",
+    shortName: "Inventory",
+    slug: "inventory",
+    description: "Monitor stock, costs, alerts, and movements.",
+    permissionPrefixes: ["inventory."],
+    group: "Catalog & stock",
+    icon: "inventory",
+  },
+  {
+    name: "Recipes",
+    shortName: "Recipes",
+    slug: "recipes",
+    description: "Map dishes to ingredients and live recipe cost.",
+    permissionPrefixes: ["recipes."],
+    group: "Catalog & stock",
+    icon: "recipes",
+  },
+  {
+    name: "Purchasing",
+    shortName: "Purchasing",
+    slug: "purchasing",
+    description: "Issue purchase orders and receive goods into stock.",
+    permissionPrefixes: ["purchase_", "goods_receipts.", "supplier_invoices."],
+    group: "Supply chain",
+    icon: "purchasing",
+  },
+  {
+    name: "Suppliers",
+    shortName: "Suppliers",
+    slug: "suppliers",
+    description: "Manage supplier contacts and commercial details.",
+    permissionPrefixes: ["suppliers."],
+    group: "Supply chain",
+    icon: "suppliers",
+  },
+  {
+    name: "Customers",
+    shortName: "Customers",
+    slug: "customers",
+    description: "Keep useful guest profiles, addresses, and order history.",
+    permissionPrefixes: ["customers."],
+    group: "People",
+    icon: "customers",
   },
   {
     name: "Staff",
@@ -142,7 +157,8 @@ export const managementModules = [
     slug: "staff",
     description: "Review employment, access roles, and shifts.",
     permissionPrefixes: ["staff.", "security."],
-    marker: "12",
+    group: "People",
+    icon: "staff",
   },
   {
     name: "Finance",
@@ -150,7 +166,8 @@ export const managementModules = [
     slug: "finance",
     description: "Track payments, expenses, and daily close.",
     permissionPrefixes: ["payments.", "expenses.", "daily_close.", "finance."],
-    marker: "13",
+    group: "Insights",
+    icon: "finance",
   },
   {
     name: "Reports",
@@ -158,7 +175,8 @@ export const managementModules = [
     slug: "reports",
     description: "Read live sales, channel, payment, and item facts.",
     permissionPrefixes: ["reports."],
-    marker: "14",
+    group: "Insights",
+    icon: "reports",
   },
   {
     name: "Settings",
@@ -166,13 +184,19 @@ export const managementModules = [
     slug: "settings",
     description: "Configure the restaurant and inspect the audit trail.",
     permissionPrefixes: ["settings.", "audit.", "security."],
-    marker: "15",
+    group: "System",
+    icon: "settings",
   },
 ] as const;
 
 export type ManagementModule = (typeof managementModules)[number];
 
-export function canAccessModule(permissions: string[], module: ManagementModule) {
+export function canAccessModule(
+  permissions: string[],
+  module: ManagementModule,
+  dineInEnabled: boolean,
+) {
+  if ("dineInOnly" in module && module.dineInOnly && !dineInEnabled) return false;
   return module.permissionPrefixes.some((prefix) =>
     permissions.some((permission) => permission.startsWith(prefix)),
   );

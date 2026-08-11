@@ -119,6 +119,51 @@ export async function createMenuVariant(formData: FormData) {
   });
 }
 
+export async function updateMenuCategory(formData: FormData) {
+  await perform("menu", "Menu category updated.", async () => {
+    const { supabase } = await context("menu.manage_catalog");
+    const { error } = await supabase.from("menu_categories").update({
+      name: value(formData, "name"),
+      description: optionalValue(formData, "description"),
+      sort_order: numberValue(formData, "sort_order"),
+    }).eq("id", value(formData, "category_id"));
+    if (error) throw error;
+  });
+}
+
+export async function updateMenuItem(formData: FormData) {
+  await perform("menu", "Menu item updated.", async () => {
+    const { supabase } = await context("menu.manage_catalog");
+    const menuItemId = value(formData, "menu_item_id");
+    const categoryId = value(formData, "category_id");
+    const { error } = await supabase.from("menu_items").update({
+      category_id: categoryId,
+      name: value(formData, "name"),
+      description: optionalValue(formData, "description"),
+      price_minor: moneyValue(formData, "price"),
+      station: value(formData, "station") || "MAIN KITCHEN",
+    }).eq("id", menuItemId);
+    if (error) throw error;
+    const { error: categoryError } = await supabase.from("menu_item_categories")
+      .update({ category_id: categoryId })
+      .eq("menu_item_id", menuItemId)
+      .eq("is_primary", true);
+    if (categoryError) throw categoryError;
+  });
+}
+
+export async function updateMenuVariant(formData: FormData) {
+  await perform("menu", "Menu variant updated.", async () => {
+    const { supabase } = await context("menu.manage_catalog");
+    const { error } = await supabase.from("menu_item_variants").update({
+      name: optionalValue(formData, "name"),
+      price_minor: moneyValue(formData, "price"),
+      is_available: value(formData, "is_available") === "true",
+    }).eq("id", value(formData, "variant_id"));
+    if (error) throw error;
+  });
+}
+
 export async function toggleMenuAvailability(formData: FormData) {
   const available = value(formData, "available") === "true";
   await perform("menu", available ? "Menu item is available." : "Menu item marked sold out.", async () => {
@@ -223,6 +268,10 @@ export async function createOrder(formData: FormData) {
       p_table_id: optionalValue(formData, "table_id"),
       p_notes: optionalValue(formData, "notes"),
       p_send_to_kitchen: true,
+      p_guest_name: optionalValue(formData, "guest_name"),
+      p_guest_phone: optionalValue(formData, "guest_phone"),
+      p_guest_email: optionalValue(formData, "guest_email"),
+      p_delivery_address: optionalValue(formData, "delivery_address"),
     });
     if (error) throw error;
   });
@@ -260,13 +309,13 @@ export async function advanceOrder(formData: FormData) {
   });
 }
 
-export async function advanceKitchenTicket(formData: FormData) {
-  await perform("kitchen", "Kitchen ticket updated.", async () => {
-    const nextStatus = value(formData, "next_status");
+export async function advanceOrderKitchen(formData: FormData) {
+  const nextStatus = value(formData, "next_status");
+  await perform("orders", nextStatus === "PREPARING" ? "Order marked as preparing." : "Order marked ready.", async () => {
     const permission = nextStatus === "PREPARING" ? "kitchen.start_ticket" : "kitchen.ready_ticket";
     const { supabase } = await context(permission);
-    const { error } = await supabase.rpc("advance_kitchen_ticket", {
-      p_ticket_id: value(formData, "ticket_id"),
+    const { error } = await supabase.rpc("advance_order_kitchen", {
+      p_order_id: value(formData, "order_id"),
       p_next_status: nextStatus,
     });
     if (error) throw error;
@@ -485,6 +534,77 @@ export async function saveOperationalSetting(formData: FormData) {
       description: optionalValue(formData, "description"),
       updated_by: String(claims.sub),
     }, { onConflict: "location_id,setting_key" });
+    if (error) throw error;
+  });
+}
+
+export async function assignRider(formData: FormData) {
+  await perform("deliveries", "Rider assigned.", async () => {
+    const { supabase } = await context("deliveries.assign");
+    const { error } = await supabase.rpc("assign_delivery_rider", {
+      p_order_id: value(formData, "order_id"),
+      p_rider_id: value(formData, "rider_id"),
+      p_delivery_fee_minor: moneyValue(formData, "delivery_fee"),
+      p_delivery_zone_id: optionalValue(formData, "delivery_zone_id"),
+      p_reason: optionalValue(formData, "reason"),
+    });
+    if (error) throw error;
+  });
+}
+
+export async function advanceDeliveryStatusAction(formData: FormData) {
+  await perform("deliveries", "Delivery updated.", async () => {
+    const { supabase } = await context("deliveries.assign");
+    const { error } = await supabase.rpc("advance_delivery_status", {
+      p_delivery_id: value(formData, "delivery_id"),
+      p_action: value(formData, "delivery_action"),
+      p_reason: optionalValue(formData, "reason"),
+    });
+    if (error) throw error;
+  });
+}
+
+export async function recordSettlement(formData: FormData) {
+  await perform("deliveries", "Settlement recorded.", async () => {
+    const { supabase, assignment } = await context("deliveries.record_settlement");
+    const deliveryIds = formData.getAll("delivery_ids").map(String).filter(Boolean);
+    if (deliveryIds.length === 0) throw new Error("Select at least one delivery to settle.");
+    const { error } = await supabase.rpc("record_rider_settlement", {
+      p_organization_id: assignment.organization_id,
+      p_location_id: assignment.location_id,
+      p_rider_id: value(formData, "rider_id"),
+      p_actual_amount_minor: moneyValue(formData, "actual_amount"),
+      p_delivery_ids: deliveryIds,
+      p_handover_reference: optionalValue(formData, "handover_reference"),
+      p_notes: optionalValue(formData, "notes"),
+    });
+    if (error) throw error;
+  });
+}
+
+export async function activateRiderProfile(formData: FormData) {
+  await perform("deliveries", "Rider activated.", async () => {
+    const { supabase, assignment } = await context("deliveries.manage_rider_status");
+    const { error } = await supabase.from("rider_profiles").insert({
+      organization_id: assignment.organization_id,
+      location_id: assignment.location_id,
+      profile_id: value(formData, "profile_id"),
+      status: "OFFLINE",
+    });
+    if (error) throw error;
+  });
+}
+
+export async function createDeliveryZone(formData: FormData) {
+  await perform("deliveries", "Delivery zone added.", async () => {
+    const { supabase, assignment } = await context("deliveries.manage_zones");
+    const { error } = await supabase.from("delivery_zones").insert({
+      organization_id: assignment.organization_id,
+      location_id: assignment.location_id,
+      name: value(formData, "name"),
+      description: optionalValue(formData, "description"),
+      base_fee_minor: moneyValue(formData, "base_fee"),
+    });
     if (error) throw error;
   });
 }

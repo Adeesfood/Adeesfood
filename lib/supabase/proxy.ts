@@ -28,7 +28,11 @@ export async function updateSession(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
 
-  if (!data?.claims && request.nextUrl.pathname.startsWith("/management")) {
+  const isProtectedRoute =
+    request.nextUrl.pathname.startsWith("/management") ||
+    request.nextUrl.pathname.startsWith("/rider");
+
+  if (!data?.claims && isProtectedRoute) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/staff/login";
     loginUrl.search = "?error=session-required";

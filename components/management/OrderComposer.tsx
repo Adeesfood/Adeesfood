@@ -63,18 +63,32 @@ function money(amount: number) {
   return `GH₵ ${(amount / 100).toFixed(2)}`;
 }
 
-export function OrderComposer({ menuItems, customers, tables }: {
+const CHANNEL_LABELS: Record<string, string> = {
+  WALK_IN: "Walk-in",
+  TAKEAWAY: "Pickup",
+  DELIVERY: "Delivery",
+  PHONE: "Phone order",
+  WHATSAPP: "WhatsApp order",
+  DINE_IN: "Dine-in",
+};
+
+export function OrderComposer({ menuItems, customers, tables, dineInEnabled }: {
   menuItems: MenuItem[];
   customers: SelectOption[];
   tables: SelectOption[];
+  dineInEnabled: boolean;
 }) {
-  const [channel, setChannel] = useState("DINE_IN");
+  const channelOptions = dineInEnabled
+    ? ["WALK_IN", "DINE_IN", "TAKEAWAY", "DELIVERY", "PHONE", "WHATSAPP"]
+    : ["WALK_IN", "TAKEAWAY", "DELIVERY", "PHONE", "WHATSAPP"];
+  const [channel, setChannel] = useState("WALK_IN");
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [variantSelections, setVariantSelections] = useState<Record<string, string>>({});
   const [modifierSelections, setModifierSelections] = useState<Record<string, string[]>>({});
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [customerId, setCustomerId] = useState("");
 
   const categories = useMemo(
     () => ["All", ...Array.from(new Set(menuItems.flatMap((item) => item.categories)))],
@@ -173,8 +187,8 @@ export function OrderComposer({ menuItems, customers, tables }: {
       <input type="hidden" name="channel" value={channel} />
       <section className="pos-catalog">
         <div className="pos-order-types" role="group" aria-label="Order channel">
-          {["DINE_IN", "TAKEAWAY", "DELIVERY", "PHONE", "WHATSAPP"].map((option) => (
-            <button className={channel === option ? "is-active" : ""} type="button" onClick={() => setChannel(option)} key={option}>{option.replaceAll("_", " ")}</button>
+          {channelOptions.map((option) => (
+            <button className={channel === option ? "is-active" : ""} type="button" onClick={() => setChannel(option)} key={option}>{CHANNEL_LABELS[option]}</button>
           ))}
         </div>
         <div className="pos-tools">
@@ -213,10 +227,17 @@ export function OrderComposer({ menuItems, customers, tables }: {
       </section>
 
       <aside className="pos-cart">
-        <div className="pos-cart-head"><div><p className="ops-kicker">Current order</p><h2>{channel.replaceAll("_", " ")}</h2></div><span>{cart.reduce((sum, line) => sum + line.quantity, 0)} items</span></div>
+        <div className="pos-cart-head"><div><p className="ops-kicker">Current order</p><h2>{CHANNEL_LABELS[channel]}</h2></div><span>{cart.reduce((sum, line) => sum + line.quantity, 0)} items</span></div>
         <div className="pos-customer-fields">
-          <label>Customer<select name="customer_id" defaultValue=""><option value="">Walk-in guest</option>{customers.map((customer) => <option value={customer.id} key={customer.id}>{customer.label}</option>)}</select></label>
+          <label>Saved customer<select name="customer_id" value={customerId} onChange={(event) => setCustomerId(event.target.value)}><option value="">Not a saved customer</option>{customers.map((customer) => <option value={customer.id} key={customer.id}>{customer.label}</option>)}</select></label>
           {channel === "DINE_IN" ? <label>Table<select name="table_id" required defaultValue=""><option value="" disabled>Choose a table</option>{tables.map((table) => <option value={table.id} key={table.id}>{table.label}</option>)}</select></label> : null}
+          {!customerId && channel !== "DINE_IN" ? (
+            <>
+              <label>Guest name<input name="guest_name" placeholder="Who is this order for?" /></label>
+              <label>Guest phone<input name="guest_phone" type="tel" placeholder="024 000 0000" /></label>
+            </>
+          ) : null}
+          {channel === "DELIVERY" ? <label className="pos-full">Delivery address<textarea name="delivery_address" rows={2} required placeholder="House number, street, landmark…" /></label> : null}
         </div>
         <div className="pos-cart-lines">
           {cart.length ? cart.map((line) => (

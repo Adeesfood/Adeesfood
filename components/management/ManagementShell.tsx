@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { canAccessModule, managementModules } from "@/lib/access";
+import { canAccessModule, managementModules, navGroups } from "@/lib/access";
 import { signOutStaff } from "@/app/management/actions";
+import { NavIcon } from "@/components/management/NavIcon";
 
 type ManagementShellProps = {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ type ManagementShellProps = {
   locationName: string;
   roleName: string;
   permissions: string[];
+  dineInEnabled: boolean;
 };
 
 export function ManagementShell({
@@ -23,6 +25,7 @@ export function ManagementShell({
   locationName,
   roleName,
   permissions,
+  dineInEnabled,
 }: ManagementShellProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -44,26 +47,35 @@ export function ManagementShell({
         </div>
 
         <nav className="ops-nav" aria-label="Restaurant management">
-          {managementModules.filter((module) => canAccessModule(permissions, module)).map((module) => {
-            const href = module.slug ? `/management/${module.slug}` : "/management";
-            const active = module.slug ? pathname.startsWith(href) : pathname === "/management";
+          {navGroups.map((group) => {
+            const items = managementModules
+              .filter((module) => module.group === group)
+              .filter((module) => canAccessModule(permissions, module, dineInEnabled));
+            if (!items.length) return null;
             return (
-              <Link
-                className={active ? "is-active" : ""}
-                href={href}
-                key={module.name}
-                onClick={() => setIsOpen(false)}
-              >
-                <span>{module.marker}</span>
-                {module.shortName}
-                {active ? <i aria-hidden="true" /> : null}
-              </Link>
+              <div className="ops-nav-group" key={group}>
+                <p className="ops-nav-group-label">{group}</p>
+                {items.map((module) => {
+                  const href = module.slug ? `/management/${module.slug}` : "/management";
+                  const active = module.slug ? pathname.startsWith(href) : pathname === "/management";
+                  return (
+                    <Link
+                      className={active ? "is-active" : ""}
+                      href={href}
+                      key={module.name}
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <NavIcon name={module.icon} />
+                      {module.shortName}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
 
         <div className="ops-sidebar-foot">
-          <div className="ops-live"><i aria-hidden="true" /><span>Systems online<small>Supabase · Live</small></span></div>
           <Link href="/" className="ops-site-link">Public website <span>↗</span></Link>
         </div>
       </aside>

@@ -67,7 +67,7 @@ export async function submitOnlineOrder(
     if (channel === "DELIVERY" && !deliveryAddress) throw new Error("Enter the delivery address.");
 
     const supabase = await createClient();
-    const { data, error } = await supabase.rpc("create_online_order", {
+    const { data, error } = await supabase.rpc("create_online_order_v2", {
       p_location_id: locationId,
       p_channel: channel,
       p_guest_name: guestName,

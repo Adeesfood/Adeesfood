@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LiveRefresh } from "@/components/management/LiveRefresh";
+import { NavIcon } from "@/components/management/NavIcon";
 import { canAccessModule, managementModules } from "@/lib/access";
 import { businessDate, formatDateTime, formatMoney, getManagementSession } from "@/lib/management";
 
@@ -12,6 +13,12 @@ type DashboardMetrics = {
   reservations_today: number;
   occupied_tables: number;
   available_tables: number;
+  ready_for_pickup: number;
+  awaiting_rider: number;
+  deliveries_in_progress: number;
+  delivered_today: number;
+  failed_deliveries_today: number;
+  cod_held_minor: number;
   low_stock_items: number;
   expenses_minor: number;
 };
@@ -25,12 +32,18 @@ const emptyMetrics: DashboardMetrics = {
   reservations_today: 0,
   occupied_tables: 0,
   available_tables: 0,
+  ready_for_pickup: 0,
+  awaiting_rider: 0,
+  deliveries_in_progress: 0,
+  delivered_today: 0,
+  failed_deliveries_today: 0,
+  cod_held_minor: 0,
   low_stock_items: 0,
   expenses_minor: 0,
 };
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { supabase, access, assignment, displayName } = await getManagementSession();
+  const { supabase, access, assignment, displayName, dineInEnabled } = await getManagementSession();
   const query = await searchParams;
   const today = businessDate();
   const [{ data: metricData }, { data: recentOrders }, { data: kitchenTickets }] = await Promise.all([
@@ -47,14 +60,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   ]);
   const metrics = metricData && typeof metricData === "object" ? { ...emptyMetrics, ...(metricData as Partial<DashboardMetrics>) } : emptyMetrics;
   const firstName = displayName.split(" ")[0];
-  const moduleLinks = managementModules.filter((module) => module.slug && canAccessModule(access.permissions, module));
+  const moduleLinks = managementModules.filter((module) => module.slug && canAccessModule(access.permissions, module, dineInEnabled));
 
   return (
     <>
       <LiveRefresh tables={["orders", "kitchen_tickets", "restaurant_tables", "inventory_items"]} />
       <section className="ops-page-head">
         <div><p className="ops-kicker">Dashboard · {today}</p><h1>Good to see you, {firstName}.</h1><p>Here is what is happening across today&apos;s service.</p></div>
-        <Link className="ops-head-action" href="/management/orders">Create order <span>＋</span></Link>
+        <Link className="ops-head-action" href="/management/orders?mode=new">Create order <span>＋</span></Link>
       </section>
       {query.error ? <div className="ops-alert is-error">Your current role cannot open that module.</div> : null}
 
@@ -62,8 +75,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <article className="ops-metric is-featured"><span>Sales today</span><strong>{formatMoney(metrics.sales_minor)}</strong><small>Successful payments</small></article>
         <article className="ops-metric"><span>Orders today</span><strong>{metrics.orders_today}</strong><small>{metrics.active_orders} active now</small></article>
         <article className="ops-metric"><span>Kitchen</span><strong>{metrics.preparing_orders}</strong><small>{metrics.ready_orders} ready for handoff</small></article>
-        <article className="ops-metric"><span>Reservations</span><strong>{metrics.reservations_today}</strong><small>Expected today</small></article>
-        <article className="ops-metric"><span>Tables</span><strong>{metrics.occupied_tables}</strong><small>{metrics.available_tables} available</small></article>
+        <article className="ops-metric"><span>Ready for pickup</span><strong>{metrics.ready_for_pickup}</strong><small>Waiting on the counter</small></article>
+        <article className="ops-metric"><span>Awaiting rider</span><strong>{metrics.awaiting_rider}</strong><small>{metrics.deliveries_in_progress} out for delivery</small></article>
+        <article className={`ops-metric${metrics.failed_deliveries_today > 0 ? " is-warning" : ""}`}><span>Delivered today</span><strong>{metrics.delivered_today}</strong><small>{metrics.failed_deliveries_today} failed today</small></article>
+        <article className={`ops-metric${metrics.cod_held_minor > 0 ? " is-warning" : ""}`}><span>COD held by riders</span><strong>{formatMoney(metrics.cod_held_minor)}</strong><small>Awaiting settlement</small></article>
+        {dineInEnabled ? (
+          <>
+            <article className="ops-metric"><span>Reservations</span><strong>{metrics.reservations_today}</strong><small>Expected today</small></article>
+            <article className="ops-metric"><span>Tables</span><strong>{metrics.occupied_tables}</strong><small>{metrics.available_tables} available</small></article>
+          </>
+        ) : null}
         <article className={`ops-metric${metrics.low_stock_items > 0 ? " is-warning" : ""}`}><span>Stock alerts</span><strong>{metrics.low_stock_items}</strong><small>At or below reorder level</small></article>
       </section>
 
@@ -81,10 +102,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </section>
 
         <section className="ops-panel">
-          <div className="ops-panel-head"><div><p className="ops-kicker">Kitchen pulse</p><h2>Active tickets</h2></div><Link href="/management/kitchen">Open KDS</Link></div>
+          <div className="ops-panel-head"><div><p className="ops-kicker">Kitchen pulse</p><h2>Active tickets</h2></div><Link href="/management/orders">View orders</Link></div>
           <div className="ops-list">
             {(kitchenTickets ?? []).length ? (kitchenTickets ?? []).map((ticket) => (
-              <Link className="ops-list-row is-compact" href="/management/kitchen" key={ticket.id}>
+              <Link className="ops-list-row is-compact" href="/management/orders" key={ticket.id}>
                 <div><strong>{ticket.ticket_number}</strong><small>Queued {formatDateTime(ticket.queued_at)}</small></div><em>{ticket.status}</em>
               </Link>
             )) : <div className="ops-empty"><strong>Kitchen is clear</strong><p>New tickets will appear here automatically.</p></div>}
@@ -96,7 +117,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="ops-panel-head"><div><p className="ops-kicker">Your workspace</p><h2>Management modules</h2></div><span>{assignment.role_name} access</span></div>
         <div className="ops-launch-grid">
           {moduleLinks.map((module) => (
-            <Link href={`/management/${module.slug}`} key={module.slug}><span>{module.marker}</span><h3>{module.name}</h3><p>{module.description}</p><i aria-hidden="true">↗</i></Link>
+            <Link href={`/management/${module.slug}`} key={module.slug}><NavIcon name={module.icon} /><h3>{module.name}</h3><p>{module.description}</p><i aria-hidden="true">↗</i></Link>
           ))}
         </div>
       </section>
