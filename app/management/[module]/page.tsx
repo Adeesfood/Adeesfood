@@ -533,7 +533,7 @@ async function ReservationsModule(session: Session) {
 async function StaffModule(session: Session) {
   const { supabase, assignment, access } = session;
   const [employmentResult, assignmentsResult, shiftsResult] = await Promise.all([
-    supabase.from("staff_employments").select("id, profile_id, employee_number, start_date, end_date, is_active, profiles(display_name, phone)").eq("organization_id", assignment.organization_id).order("created_at"),
+    supabase.from("staff_employments").select("id, profile_id, employee_number, start_date, end_date, is_active, profiles(display_name, phone, email)").eq("organization_id", assignment.organization_id).order("created_at"),
     supabase.from("user_role_assignments").select("profile_id, revoked_at, roles(code, name)").eq("organization_id", assignment.organization_id).is("revoked_at", null),
     supabase.from("staff_shifts").select("*, staff_employments(employee_number, profiles(display_name))").eq("location_id", assignment.location_id).order("starts_at", { ascending: false }).limit(50),
   ]);
@@ -549,36 +549,35 @@ async function StaffModule(session: Session) {
             const role = Array.isArray(roleAssignment?.roles) ? roleAssignment.roles[0] : roleAssignment?.roles;
             const canManage = hasPermission(access.permissions, "security.manage_users_roles");
             return (
-              <article className={employment.is_active ? "" : "is-archived"} key={employment.id}>
-                <span className="ops-avatar">{profile?.display_name?.split(" ").map((part: string) => part[0]).slice(0,2).join("")}</span>
-                <div>
-                  <h3>{profile?.display_name}</h3>
+              <details className={`staff-card${employment.is_active ? "" : " is-archived"}`} key={employment.id}>
+                <summary>
+                  <span className="ops-avatar">{profile?.display_name?.split(" ").map((part: string) => part[0]).slice(0,2).join("")}</span>
+                  <span className="staff-card-name"><h3>{profile?.display_name}</h3><strong>{employment.is_active ? (role?.name ?? "No active role") : "Archived"}</strong></span>
+                </summary>
+                <div className="staff-card-body">
+                  <p>{profile?.email || "No email on file"}</p>
                   <p>{employment.employee_number} · Started {employment.start_date}{employment.is_active ? "" : ` · Archived ${employment.end_date}`}</p>
-                  <strong>{employment.is_active ? (role?.name ?? "No active role") : "Archived"}</strong>
-                  {employment.is_active ? (
-                    <details className="catalog-edit">
-                      <summary>Details</summary>
-                      {canManage ? (
-                        <form action={updateStaffMember} className="ops-form">
-                          <input type="hidden" name="profile_id" value={employment.profile_id} />
-                          <label>Full name<input name="display_name" defaultValue={profile?.display_name ?? ""} required /></label>
-                          <div className="ops-form-row">
-                            <label>Phone<input name="phone" defaultValue={profile?.phone ?? ""} /></label>
-                            <label>Employee number<input name="employee_number" defaultValue={employment.employee_number} required /></label>
-                          </div>
-                          <FormSubmitButton>Save changes</FormSubmitButton>
-                        </form>
-                      ) : <p className="ops-form-note">{profile?.phone ? `Phone: ${profile.phone}` : "No phone on file"}</p>}
-                      {canManage ? (
-                        <div className="staff-actions">
-                          <form action={changeStaffRole}><input type="hidden" name="profile_id" value={employment.profile_id} /><select name="role_code" defaultValue={role?.code ?? "RECEPTIONIST"}><option>RECEPTIONIST</option><option>MANAGER</option><option>OWNER</option><option>DELIVERY_RIDER</option></select><button type="submit">Change role</button></form>
-                          <form action={archiveStaffMember}><input type="hidden" name="profile_id" value={employment.profile_id} /><input type="hidden" name="reason" value="Archived from Staff page" /><button className="is-danger" type="submit">Archive</button></form>
-                        </div>
-                      ) : null}
-                    </details>
+                  {employment.is_active && canManage ? (
+                    <form action={updateStaffMember} className="ops-form">
+                      <input type="hidden" name="profile_id" value={employment.profile_id} />
+                      <label>Full name<input name="display_name" defaultValue={profile?.display_name ?? ""} required /></label>
+                      <div className="ops-form-row">
+                        <label>Phone<input name="phone" defaultValue={profile?.phone ?? ""} /></label>
+                        <label>Employee number<input name="employee_number" defaultValue={employment.employee_number} required /></label>
+                      </div>
+                      <FormSubmitButton>Save changes</FormSubmitButton>
+                    </form>
+                  ) : (
+                    <p className="ops-form-note">{profile?.phone ? `Phone: ${profile.phone}` : "No phone on file"}</p>
+                  )}
+                  {employment.is_active && canManage ? (
+                    <div className="staff-actions">
+                      <form action={changeStaffRole}><input type="hidden" name="profile_id" value={employment.profile_id} /><select name="role_code" defaultValue={role?.code ?? "RECEPTIONIST"}><option>RECEPTIONIST</option><option>MANAGER</option><option>OWNER</option><option>DELIVERY_RIDER</option></select><button type="submit">Change role</button></form>
+                      <form action={archiveStaffMember}><input type="hidden" name="profile_id" value={employment.profile_id} /><input type="hidden" name="reason" value="Archived from Staff page" /><button className="is-danger" type="submit">Archive</button></form>
+                    </div>
                   ) : null}
                 </div>
-              </article>
+              </details>
             );
           })}
           {employmentResult.data?.length ? null : <Empty title="No staff yet" body="Add the first team member using the form." />}
