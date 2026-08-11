@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getManagementSession } from "@/lib/management";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -500,6 +501,42 @@ export async function changeStaffRole(formData: FormData) {
       p_role_code: value(formData, "role_code"),
     });
     if (error) throw error;
+  });
+}
+
+export async function inviteStaffMember(formData: FormData) {
+  await perform("staff", "Staff member added. Share their email and temporary password to sign in.", async () => {
+    const { supabase, assignment } = await context("security.manage_users_roles");
+    const email = value(formData, "email").toLowerCase();
+    const password = value(formData, "password");
+    const displayName = value(formData, "display_name");
+    if (!email.includes("@")) throw new Error("Enter a valid email address.");
+    if (password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
+
+    const admin = createAdminClient();
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { display_name: displayName },
+    });
+    if (createError) throw createError;
+    const profileId = created.user?.id;
+    if (!profileId) throw new Error("The staff account could not be created.");
+
+    const { error: onboardError } = await supabase.rpc("onboard_staff_member", {
+      p_organization_id: assignment.organization_id,
+      p_location_id: assignment.location_id,
+      p_profile_id: profileId,
+      p_display_name: displayName,
+      p_phone: optionalValue(formData, "phone"),
+      p_employee_number: value(formData, "employee_number"),
+      p_role_code: value(formData, "role_code"),
+    });
+    if (onboardError) {
+      await admin.auth.admin.deleteUser(profileId);
+      throw onboardError;
+    }
   });
 }
 
