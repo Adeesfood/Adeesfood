@@ -540,6 +540,21 @@ export async function inviteStaffMember(formData: FormData) {
   });
 }
 
+export async function updateStaffMember(formData: FormData) {
+  await perform("staff", "Staff details updated.", async () => {
+    const { supabase, assignment } = await context("security.manage_users_roles");
+    const { error } = await supabase.rpc("update_staff_member", {
+      p_organization_id: assignment.organization_id,
+      p_location_id: assignment.location_id,
+      p_profile_id: value(formData, "profile_id"),
+      p_display_name: value(formData, "display_name"),
+      p_phone: optionalValue(formData, "phone"),
+      p_employee_number: value(formData, "employee_number"),
+    });
+    if (error) throw error;
+  });
+}
+
 export async function archiveStaffMember(formData: FormData) {
   await perform("staff", "Staff member archived.", async () => {
     const { supabase, assignment } = await context("security.manage_users_roles");
